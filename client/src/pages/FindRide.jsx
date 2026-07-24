@@ -1,301 +1,396 @@
 import React, { useState, useEffect } from "react";
-import { Search, MapPin, Calendar, Clock, Filter, Car, Zap, CheckCircle2, ChevronRight, X } from "lucide-react";
-import { getAvailableRidesApi, bookRideApi } from "../services/api";
-import LiveMap from "../components/LiveMap";
-import toast from "react-hot-toast";
+import axios from "axios";
+import MapContainerComponent from "../components/map/MapContainerComponent";
+import DynamicSwitchingDemo from "../components/map/DynamicSwitchingDemo";
+import {
+  MapPin,
+  Search,
+  Navigation,
+  Car,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Sparkles,
+  Users,
+  RefreshCcw,
+} from "lucide-react";
+
+// Mock drivers generator offset relative to center position
+const generateMockDrivers = (center) => {
+  const lat = center?.lat || 37.7749;
+  const lng = center?.lng || -122.4194;
+
+  return [
+    {
+      id: "drv-1",
+      name: "Carlos Rodriguez",
+      vehicleModel: "Toyota Prius",
+      vehicleNumber: "NY-4921",
+      rating: 4.9,
+      availableSeats: 3,
+      eta: "4 mins away",
+      distance: "0.6 km",
+      phone: "+1 (555) 234-5678",
+      destination: "Airport Express",
+      isAvailable: true,
+      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+      location: { lat: lat + 0.005, lng: lng + 0.004 },
+    },
+    {
+      id: "drv-2",
+      name: "Sarah Jenkins",
+      vehicleModel: "Honda Accord",
+      vehicleNumber: "NY-8812",
+      rating: 4.8,
+      availableSeats: 2,
+      eta: "6 mins away",
+      distance: "1.1 km",
+      phone: "+1 (555) 876-5432",
+      destination: "Downtown Financial District",
+      isAvailable: true,
+      avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=200",
+      location: { lat: lat - 0.006, lng: lng + 0.007 },
+    },
+    {
+      id: "drv-3",
+      name: "Michael Chen",
+      vehicleModel: "Hyundai Ioniq 5",
+      vehicleNumber: "NY-1039",
+      rating: 5.0,
+      availableSeats: 3,
+      eta: "8 mins away",
+      distance: "1.5 km",
+      phone: "+1 (555) 345-6789",
+      destination: "Central Railway Station",
+      isAvailable: true,
+      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
+      location: { lat: lat + 0.008, lng: lng - 0.005 },
+    },
+    {
+      id: "drv-4",
+      name: "David Miller",
+      vehicleModel: "Nissan Leaf",
+      vehicleNumber: "NY-5520",
+      rating: 4.7,
+      availableSeats: 1,
+      eta: "3 mins away",
+      distance: "0.4 km",
+      phone: "+1 (555) 654-3210",
+      destination: "Tech University Campus",
+      isAvailable: true,
+      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200",
+      location: { lat: lat - 0.003, lng: lng - 0.006 },
+    },
+    {
+      id: "drv-5",
+      name: "Priya Sharma",
+      vehicleModel: "Tesla Model 3",
+      vehicleNumber: "NY-7731",
+      rating: 4.9,
+      availableSeats: 2,
+      eta: "5 mins away",
+      distance: "0.9 km",
+      phone: "+1 (555) 987-6543",
+      destination: "Metro Galleria Mall",
+      isAvailable: true,
+      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200",
+      location: { lat: lat + 0.002, lng: lng + 0.009 },
+    },
+  ];
+};
 
 const FindRide = () => {
-  const [rides, setRides] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [originQuery, setOriginQuery] = useState("");
-  const [destinationQuery, setDestinationQuery] = useState("");
-  const [selectedRide, setSelectedRide] = useState(null);
-  const [bookingSeats, setBookingSeats] = useState(1);
-  const [bookingLoading, setBookingLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [pickupInput, setPickupInput] = useState("");
+  const [destInput, setDestInput] = useState("");
+  const [pickup, setPickup] = useState(null);
+  const [destination, setDestination] = useState(null);
+  const [drivers, setDrivers] = useState([]);
+  const [showDrivers, setShowDrivers] = useState(true);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(null);
+  const [locating, setLocating] = useState(true);
 
-  useEffect(() => {
-    fetchRides();
-  }, []);
-
-  const fetchRides = async () => {
-    try {
-      setLoading(true);
-      const res = await getAvailableRidesApi({
-        origin: originQuery,
-        destination: destinationQuery,
-      });
-      if (res.data?.rides) {
-        setRides(res.data.rides);
-      }
-    } catch (err) {
-      console.error("Fetch rides error:", err);
-      toast.error("Failed to load available rides");
-    } finally {
-      setLoading(false);
+  // Request browser geolocation on page load
+  const getUserCurrentLocation = () => {
+    setLocating(true);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            address: "Your Current GPS Location",
+          };
+          setUserLocation(coords);
+          setPickup(coords);
+          setPickupInput("Your Current GPS Location");
+          setDrivers(generateMockDrivers(coords));
+          setLocating(false);
+        },
+        (error) => {
+          console.warn("Geolocation denied or error, falling back to default:", error);
+          const fallback = { lat: 37.7749, lng: -122.4194, address: "San Francisco City Center" };
+          setUserLocation(fallback);
+          setPickup(fallback);
+          setPickupInput("San Francisco City Center");
+          setDrivers(generateMockDrivers(fallback));
+          setLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      const fallback = { lat: 37.7749, lng: -122.4194, address: "San Francisco City Center" };
+      setUserLocation(fallback);
+      setPickup(fallback);
+      setPickupInput("San Francisco City Center");
+      setDrivers(generateMockDrivers(fallback));
+      setLocating(false);
     }
   };
 
-  const handleBook = async () => {
-    if (!selectedRide) return;
+  useEffect(() => {
+    getUserCurrentLocation();
+  }, []);
+
+  // Geocode address text into lat/lng using Nominatim API
+  const handleAddressSearch = async (e) => {
+    e.preventDefault();
+    if (!pickupInput && !destInput) return;
+
+    setSearching(true);
     try {
-      setBookingLoading(true);
-      await bookRideApi(selectedRide._id, { seats: bookingSeats });
-      toast.success("Seat booked successfully! View details on your Passenger Dashboard.");
-      setSelectedRide(null);
-      fetchRides();
+      if (pickupInput && pickupInput !== "Your Current GPS Location") {
+        const res = await axios.get(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(pickupInput)}`
+        );
+        if (res.data && res.data.length > 0) {
+          const first = res.data[0];
+          const newPickup = {
+            lat: parseFloat(first.lat),
+            lng: parseFloat(first.lon),
+            address: first.display_name,
+          };
+          setPickup(newPickup);
+          setUserLocation(newPickup);
+          setDrivers(generateMockDrivers(newPickup));
+        }
+      }
+
+      if (destInput) {
+        const res = await axios.get(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destInput)}`
+        );
+        if (res.data && res.data.length > 0) {
+          const first = res.data[0];
+          setDestination({
+            lat: parseFloat(first.lat),
+            lng: parseFloat(first.lon),
+            address: first.display_name,
+          });
+        }
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Error booking ride");
+      console.error("Geocoding search error:", err);
     } finally {
-      setBookingLoading(false);
+      setSearching(false);
     }
+  };
+
+  // Map click handler to toggle setting pickup or destination
+  const handleMapClick = (coords) => {
+    if (!pickup) {
+      const p = { ...coords, address: `Location (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})` };
+      setPickup(p);
+      setPickupInput(p.address);
+    } else if (!destination) {
+      const d = { ...coords, address: `Destination (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})` };
+      setDestination(d);
+      setDestInput(d.address);
+    } else {
+      const d = { ...coords, address: `Destination (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})` };
+      setDestination(d);
+      setDestInput(d.address);
+    }
+  };
+
+  const handleBookRide = (driver) => {
+    setBookingSuccess(`Ride requested with ${driver.name} (${driver.vehicleModel})!`);
+    setSelectedDriver(null);
+    setTimeout(() => setBookingSuccess(null), 5000);
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header */}
-      <div className="border-b border-slate-800 pb-5">
-        <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">
-          <Zap className="w-4 h-4 fill-current" />
-          <span>Dynamic Rerouting Enabled</span>
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+        <div>
+          <div className="flex items-center space-x-3">
+            <h1 className="text-3xl font-extrabold text-white">Find a Shared Ride</h1>
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              Live Map Matching
+            </span>
+          </div>
+          <p className="text-slate-400 text-sm mt-1">
+            Locate nearby RouteMate drivers, select pickup & destination, and experience dynamic taxi switching.
+          </p>
         </div>
-        <h1 className="text-3xl font-black text-white">Find a Shared Ride</h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Search verified RouteMate driver offerings with real-time OpenStreetMap route previews.
-        </p>
+
+        <button
+          onClick={getUserCurrentLocation}
+          className="px-4 py-2.5 rounded-xl text-sm font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 flex items-center space-x-2 transition-colors"
+        >
+          <RefreshCcw className={`w-4 h-4 ${locating ? "animate-spin" : ""}`} />
+          <span>{locating ? "Locating GPS..." : "Refresh Location"}</span>
+        </button>
       </div>
 
-      {/* Search Filter Bar */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          fetchRides();
-        }}
-        className="glass-card border border-slate-800 rounded-3xl p-6 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-xl"
-      >
-        <div>
-          <label className="text-xs font-bold text-slate-300 block mb-1">Origin Location</label>
-          <div className="relative">
-            <MapPin className="w-4 h-4 text-indigo-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Leaving from (e.g. Downtown)"
-              value={originQuery}
-              onChange={(e) => setOriginQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
+      {bookingSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-semibold flex items-center space-x-3 animate-in fade-in">
+          <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{bookingSuccess}</span>
         </div>
+      )}
 
-        <div>
-          <label className="text-xs font-bold text-slate-300 block mb-1">Destination Target</label>
-          <div className="relative">
-            <MapPin className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Going to (e.g. Airport)"
-              value={destinationQuery}
-              onChange={(e) => setDestinationQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-slate-300 block mb-1">Schedule</label>
-          <div className="relative">
-            <Calendar className="w-4 h-4 text-violet-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Today / Immediate"
-              readOnly
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-slate-400 cursor-not-allowed"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-end">
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2 transition-all"
-          >
-            <Search className="w-4 h-4" />
-            <span>Search Available Rides</span>
-          </button>
-        </div>
-      </form>
-
-      {/* Main Grid: Ride List & Interactive OSM Map */}
+      {/* Main Grid Layout: Inputs & Map */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Ride Cards List */}
-        <div className="lg:col-span-6 space-y-4">
-          <h2 className="text-lg font-bold text-white flex items-center justify-between">
-            <span>Available Route Listings ({rides.length})</span>
-            {loading && <span className="text-xs text-indigo-400 animate-pulse">Updating...</span>}
-          </h2>
+        {/* Left Column: Route Search Form & Dynamic Switching Demo */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Location Search Card */}
+          <div className="glass-card border border-slate-800 rounded-2xl p-6 space-y-5">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-indigo-400" />
+              Plan Your Trip
+            </h2>
 
-          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
-            {rides.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 glass-card rounded-3xl space-y-3">
-                <Car className="w-10 h-10 text-slate-500 mx-auto" />
-                <p className="text-sm font-semibold">No matching rides found.</p>
-                <p className="text-xs text-slate-500">Try clearing search filters or offering a ride yourself!</p>
-              </div>
-            ) : (
-              rides.map((ride) => (
-                <div
-                  key={ride._id}
-                  className="p-6 rounded-3xl glass-card border border-slate-800 hover:border-indigo-500/40 transition-all space-y-4 group relative"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm">
-                        {ride.driverName?.charAt(0) || "D"}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-white">{ride.driverName}</h4>
-                        <p className="text-xs text-slate-400">
-                          {ride.vehicleDetails?.make} {ride.vehicleDetails?.model} ({ride.vehicleDetails?.color})
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-xl font-black text-emerald-400 font-mono">${ride.pricePerSeat}</span>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Per Seat</p>
-                    </div>
-                  </div>
-
-                  {/* Route Summary */}
-                  <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
-                    <div className="flex items-center space-x-2 text-slate-200 font-semibold">
-                      <MapPin className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span className="truncate">{ride.origin}</span>
-                      <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
-                      <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span className="truncate">{ride.destination}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-amber-400" /> Departure: {ride.departureTime}
-                      </span>
-                      <span className="text-purple-400 font-semibold">
-                        {ride.seatsAvailable} seat(s) available
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Dynamic Switch Badge if feature triggered */}
-                  {ride.dynamicSwitchSuggested && (
-                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-300">
-                      <span className="flex items-center gap-1.5 font-bold">
-                        <Zap className="w-4 h-4 text-amber-400 fill-current animate-pulse" />
-                        Mid-Ride Taxi Switch Eligible
-                      </span>
-                      <span className="text-[10px] font-mono text-amber-400 font-bold bg-amber-500/20 px-2 py-0.5 rounded">
-                        -14m ETA SAVINGS
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Action Bar */}
-                  <div className="flex items-center justify-end pt-1">
-                    <button
-                      onClick={() => setSelectedRide(ride)}
-                      className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all hover:scale-105"
-                    >
-                      Book Seat Now
-                    </button>
-                  </div>
+            <form onSubmit={handleAddressSearch} className="space-y-4">
+              {/* Pickup Input */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                  Pickup Location
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={pickupInput}
+                    onChange={(e) => setPickupInput(e.target.value)}
+                    placeholder="Enter pickup address or click on map..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Live Route Preview Map */}
-        <div className="lg:col-span-6 space-y-4">
-          <h2 className="text-lg font-bold text-white flex items-center justify-between">
-            <span>Route Preview Map (OpenStreetMap)</span>
-            <span className="text-xs text-emerald-400 font-mono font-bold">LIVE TELEMETRY</span>
-          </h2>
-
-          <LiveMap
-            height="560px"
-            center={{ lat: 12.9716, lng: 77.5946 }}
-            zoom={12}
-            drivers={rides.map((r) => ({
-              name: r.driverName,
-              vehicle: `${r.vehicleDetails?.make} ${r.vehicleDetails?.model}`,
-              lat: r.originCoords?.lat,
-              lng: r.originCoords?.lng,
-            }))}
-            switchAlert={true}
-          />
-        </div>
-      </div>
-
-      {/* Booking Confirmation Modal */}
-      {selectedRide && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl relative">
-            <button
-              onClick={() => setSelectedRide(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                <Car className="w-6 h-6" />
               </div>
+
+              {/* Destination Input */}
               <div>
-                <h3 className="text-lg font-bold text-white">Confirm Ride Booking</h3>
-                <p className="text-xs text-slate-400">Driver: {selectedRide.driverName}</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
-              <p><strong>Route:</strong> {selectedRide.origin} ➔ {selectedRide.destination}</p>
-              <p><strong>Vehicle:</strong> {selectedRide.vehicleDetails?.make} {selectedRide.vehicleDetails?.model}</p>
-              <p><strong>Fare per seat:</strong> ${selectedRide.pricePerSeat}</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-2">Number of Seats</label>
-              <select
-                value={bookingSeats}
-                onChange={(e) => setBookingSeats(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              >
-                {[...Array(selectedRide.seatsAvailable || 1)].map((_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {i + 1} Seat{i > 0 ? "s" : ""} (${(i + 1) * selectedRide.pricePerSeat})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-              <div>
-                <span className="text-xs text-slate-400">Total Price:</span>
-                <p className="text-xl font-black text-emerald-400 font-mono">
-                  ${bookingSeats * selectedRide.pricePerSeat}
-                </p>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                  Destination
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-rose-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={destInput}
+                    onChange={(e) => setDestInput(e.target.value)}
+                    placeholder="Where are you heading?"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
+                  />
+                </div>
               </div>
 
               <button
-                onClick={handleBook}
-                disabled={bookingLoading}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-600/30 flex items-center space-x-2"
+                type="submit"
+                disabled={searching}
+                className="w-full py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
               >
-                {bookingLoading ? "Confirming..." : "Confirm & Book"}
+                <Search className="w-4 h-4" />
+                <span>{searching ? "Geocoding Route..." : "Find Route & Drivers"}</span>
               </button>
+            </form>
+
+            {/* Quick Action buttons */}
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  setPickup(null);
+                  setDestination(null);
+                  setPickupInput("");
+                  setDestInput("");
+                }}
+                className="hover:text-rose-400 transition-colors"
+              >
+                Clear Route Pins
+              </button>
+              <span>{drivers.length} Drivers Active Nearby</span>
             </div>
           </div>
+
+          {/* Nearby Drivers Quick List */}
+          <div className="glass-card border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Car className="w-4 h-4 text-amber-400" />
+                Nearby Drivers ({drivers.length})
+              </span>
+              <span className="text-xs font-normal text-slate-400">Click marker on map to view</span>
+            </h3>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {drivers.map((drv) => (
+                <div
+                  key={drv.id}
+                  onClick={() => setSelectedDriver(drv)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                    selectedDriver?.id === drv.id
+                      ? "bg-amber-500/10 border-amber-500/40 text-white"
+                      : "bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/80"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={drv.avatar}
+                      alt=""
+                      className="w-9 h-9 rounded-full object-cover ring-1 ring-slate-700"
+                    />
+                    <div>
+                      <div className="font-semibold text-xs text-white">{drv.name}</div>
+                      <div className="text-[11px] text-slate-400">
+                        {drv.vehicleModel} • <span className="text-emerald-400">{drv.availableSeats} seats</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-indigo-400">{drv.eta}</span>
+                    <div className="text-[10px] text-amber-400 font-semibold">★ {drv.rating}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Dynamic Taxi Switching Demo Section */}
+          <DynamicSwitchingDemo />
         </div>
-      )}
+
+        {/* Right Column: Full Interactive Leaflet Map */}
+        <div className="lg:col-span-7 h-[650px] lg:h-auto min-h-[550px] sticky top-24">
+          <MapContainerComponent
+            userLocation={userLocation}
+            pickup={pickup}
+            destination={destination}
+            drivers={drivers}
+            showDrivers={showDrivers}
+            setShowDrivers={setShowDrivers}
+            selectedDriver={selectedDriver}
+            setSelectedDriver={setSelectedDriver}
+            onMapClick={handleMapClick}
+            onBookRide={handleBookRide}
+            onRecenter={getUserCurrentLocation}
+          />
+        </div>
+      </div>
     </div>
   );
 };

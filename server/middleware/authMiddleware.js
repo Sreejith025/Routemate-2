@@ -31,6 +31,9 @@ export const requireAuthUser = async (req, res, next) => {
   }
 };
 
+// Export requireAuth as alias for requireAuthUser for backward compatibility
+export const requireAuth = requireAuthUser;
+
 // Middleware to restrict access based on roles
 export const requireRole = (...roles) => {
   return (req, res, next) => {
