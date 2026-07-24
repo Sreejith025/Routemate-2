@@ -4,13 +4,19 @@ import User from "../models/User.js";
 // Middleware to enforce authentication and attach current MongoDB user
 export const requireAuthUser = async (req, res, next) => {
   try {
-    const auth = getAuth(req);
+    let auth = null;
+    try {
+      auth = getAuth(req);
+    } catch (err) {
+      console.warn("Clerk getAuth warning:", err.message);
+    }
+
     const userId = auth?.userId;
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: Access denied",
+        message: "Unauthorized: Please sign in with Clerk",
       });
     }
 
@@ -31,7 +37,7 @@ export const requireAuthUser = async (req, res, next) => {
   }
 };
 
-// Export requireAuth as alias for requireAuthUser for backward compatibility
+// Export requireAuth as alias for requireAuthUser
 export const requireAuth = requireAuthUser;
 
 // Middleware to restrict access based on roles

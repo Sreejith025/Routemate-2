@@ -38,8 +38,16 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-// Enable Clerk authentication middleware globally
-app.use(clerkMiddleware());
+// Enable Clerk authentication middleware with publishable & secret key fallbacks
+const publishableKey =
+  process.env.CLERK_PUBLISHABLE_KEY ||
+  "pk_test_d2VhbHRoeS1waXBlZmlzaC01Ni5jbGVyay5hY2NvdW50cy5kZXYk";
+
+const secretKey =
+  process.env.CLERK_SECRET_KEY ||
+  "sk_test_d2VhbHRoeS1waXBlZmlzaC01Ni5jbGVyay5hY2NvdW50cy5kZXYk";
+
+app.use(clerkMiddleware({ publishableKey, secretKey }));
 
 // API Routes
 app.use("/api/users", userRoutes);
