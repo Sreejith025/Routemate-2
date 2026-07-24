@@ -134,6 +134,60 @@ export const updateProfile = async (req, res) => {
 };
 
 /**
+ * Update Passenger Ride Preferences & Safety Options (PUT /api/users/preferences or /api/user/preferences)
+ */
+export const updatePreferences = async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { ridePreference, gender, safetyPreference } = req.body;
+
+    const user = await User.findOne({ clerkId: userId });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User record not found in database",
+      });
+    }
+
+    if (ridePreference && ["shared", "private", "safety"].includes(ridePreference)) {
+      user.ridePreference = ridePreference;
+    }
+
+    if (gender && ["male", "female", "other", "prefer_not_to_say"].includes(gender)) {
+      user.gender = gender;
+    }
+
+    if (
+      safetyPreference &&
+      [
+        "femalePassengersOnly",
+        "femaleDriverOnly",
+        "femaleDriverAndPassengers",
+        "noPreference",
+      ].includes(safetyPreference)
+    ) {
+      user.safetyPreference = safetyPreference;
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Passenger ride preferences updated successfully in MongoDB",
+      user,
+    });
+  } catch (error) {
+    console.error("Update Preferences Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update ride preferences",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Get all users (Admin only)
  */
 export const getAllUsers = async (req, res) => {

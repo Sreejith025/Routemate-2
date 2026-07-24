@@ -33,12 +33,33 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Ride Preferences & Safety Options
+    ridePreference: {
+      type: String,
+      enum: ["shared", "private", "safety"],
+      default: "shared",
+    },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", "prefer_not_to_say"],
+      default: "prefer_not_to_say",
+    },
+    safetyPreference: {
+      type: String,
+      enum: [
+        "femalePassengersOnly",
+        "femaleDriverOnly",
+        "femaleDriverAndPassengers",
+        "noPreference",
+      ],
+      default: "noPreference",
+    },
   },
   {
     timestamps: true,
   }
 );
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;

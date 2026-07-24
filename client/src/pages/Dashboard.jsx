@@ -16,9 +16,12 @@ import {
   AlertCircle,
   ChevronRight,
   RefreshCw,
+  LogOut,
+  SlidersHorizontal,
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
+import SmartSwitchModal from "../components/SmartSwitchModal";
 import { getAvailableRidesApi, getUserRideHistoryApi } from "../services/api";
 
 const Dashboard = () => {
@@ -26,6 +29,7 @@ const Dashboard = () => {
   const [rides, setRides] = useState([]);
   const [userHistory, setUserHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeRideForExit, setActiveRideForExit] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -102,6 +106,42 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Ride Controls Section (Part 3 - Active Ride Controls) */}
+      {activeRides.length > 0 && (
+        <div className="glass-card border border-amber-500/30 rounded-3xl p-6 space-y-4 bg-gradient-to-r from-amber-950/30 via-slate-900 to-slate-950">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white flex items-center space-x-2">
+              <SlidersHorizontal className="w-5 h-5 text-amber-400" />
+              <span>Ride Controls</span>
+            </h3>
+            <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+              Active Ride Controls
+            </span>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start space-x-4">
+              <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
+                <LogOut className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-white">Leave Shared Ride</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-xl leading-relaxed">
+                  Leave the current shared ride and continue your journey using another RouteMate taxi if available.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setActiveRideForExit(activeRides[0])}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 shadow-lg shadow-amber-500/20 shrink-0 transition-all hover:scale-105"
+            >
+              Leave Shared Ride
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Taxi Switch Live Alert Banner (If triggered on an active ride) */}
       {activeSwitchRide && (
@@ -240,6 +280,15 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Smart Switch Modal (Part 3 & 4) */}
+      {activeRideForExit && (
+        <SmartSwitchModal
+          rideId={activeRideForExit._id}
+          onClose={() => setActiveRideForExit(null)}
+          onSwitchCompleted={fetchDashboardData}
+        />
+      )}
     </div>
   );
 };

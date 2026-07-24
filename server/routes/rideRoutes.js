@@ -4,6 +4,8 @@ import {
   getRideById,
   createRide,
   bookRide,
+  smartSwitchSearch,
+  acceptSmartSwitch,
   triggerDynamicSwitch,
   respondToSwitch,
   getUserRideHistory,
@@ -15,6 +17,11 @@ const router = express.Router();
 // Public / Guest searchable ride routes
 router.get("/", getAvailableRides);
 router.get("/history/all", getUserRideHistory);
+
+// Smart Shared Ride Exit & Switching routes
+router.post("/smart-switch-search", smartSwitchSearch);
+router.post("/switch/accept", acceptSmartSwitch);
+
 router.get("/:id", getRideById);
 
 // Protected ride operations

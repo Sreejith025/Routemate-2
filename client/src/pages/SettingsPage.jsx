@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Settings, Shield, Bell, Moon, MapPin, RefreshCw, UserCheck } from "lucide-react";
+import { Settings, Shield, Bell, Moon, MapPin, RefreshCw, UserCheck, SlidersHorizontal } from "lucide-react";
 import { useAuthContext } from "../context/AuthContext";
 import { updateProfileApi } from "../services/api";
+import RidePreferencesCard from "../components/RidePreferencesCard";
 import toast from "react-hot-toast";
 
 const SettingsPage = () => {
@@ -32,11 +33,20 @@ const SettingsPage = () => {
           <span>Account & Platform Settings</span>
         </h1>
         <p className="text-slate-400 text-sm mt-1">
-          Customize your role preferences, notification triggers, and emergency contacts.
+          Customize your role preferences, travel experience, and notification triggers.
         </p>
       </div>
 
       <div className="space-y-6">
+        {/* Ride Preferences Card Section (Part 1) */}
+        <RidePreferencesCard
+          initialPreferences={{
+            ridePreference: dbUser?.ridePreference || "shared",
+            gender: dbUser?.gender || "female",
+            safetyPreference: dbUser?.safetyPreference || "noPreference",
+          }}
+        />
+
         {/* Role Quick Switcher */}
         <div className="glass-card border border-slate-800 rounded-3xl p-8 space-y-6">
           <div className="flex items-center space-x-3">

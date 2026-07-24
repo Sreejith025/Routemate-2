@@ -13,10 +13,12 @@ import {
   RefreshCcw,
   ChevronRight,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
-import { getAvailableRidesApi, bookRideApi } from "../services/api";
+import { getAvailableRidesApi, bookRideApi, getCurrentUserApi } from "../services/api";
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
+import RidePreferencesCard from "../components/RidePreferencesCard";
 import toast from "react-hot-toast";
 
 const FindRide = () => {
@@ -27,10 +29,28 @@ const FindRide = () => {
   const [selectedRide, setSelectedRide] = useState(null);
   const [bookingSeats, setBookingSeats] = useState(1);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [showPreferencesCard, setShowPreferencesCard] = useState(false);
+  const [userPreferences, setUserPreferences] = useState(null);
 
   useEffect(() => {
     fetchRides();
+    fetchUserPrefs();
   }, []);
+
+  const fetchUserPrefs = async () => {
+    try {
+      const res = await getCurrentUserApi();
+      if (res.data?.user) {
+        setUserPreferences({
+          ridePreference: res.data.user.ridePreference,
+          gender: res.data.user.gender,
+          safetyPreference: res.data.user.safetyPreference,
+        });
+      }
+    } catch (err) {
+      console.error("Fetch user prefs error:", err);
+    }
+  };
 
   const fetchRides = async (origin, destination) => {
     try {
@@ -88,15 +108,36 @@ const FindRide = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => fetchRides()}
-          disabled={loading}
-          className="px-4 py-2.5 rounded-xl text-sm font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 flex items-center space-x-2 transition-colors"
-        >
-          <RefreshCcw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          <span>Refresh Database Rides</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowPreferencesCard(!showPreferencesCard)}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 flex items-center space-x-2 transition-colors"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-amber-400" />
+            <span>Customize Ride Preferences</span>
+          </button>
+
+          <button
+            onClick={() => fetchRides()}
+            disabled={loading}
+            className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center space-x-2 transition-colors"
+          >
+            <RefreshCcw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
+
+      {/* Ride Preferences Drawer / Card (Part 1) */}
+      {showPreferencesCard && (
+        <RidePreferencesCard
+          initialPreferences={userPreferences}
+          onSavePreferences={(newPrefs) => {
+            setUserPreferences(newPrefs);
+            setShowPreferencesCard(false);
+          }}
+        />
+      )}
 
       {/* Main Grid Layout: Inputs & Map */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

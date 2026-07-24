@@ -3,6 +3,7 @@ import {
   syncUser,
   getCurrentUser,
   updateProfile,
+  updatePreferences,
   getAllUsers,
 } from "../controllers/userController.js";
 import { requireAuthUser, requireRole } from "../middleware/authMiddleware.js";
@@ -17,6 +18,9 @@ router.get("/me", requireAuthUser, getCurrentUser);
 
 // Update user profile details / role
 router.put("/profile", requireAuthUser, updateProfile);
+
+// Update passenger ride preferences & safety options
+router.put("/preferences", requireAuthUser, updatePreferences);
 
 // Get all users (Admin only)
 router.get("/", requireAuthUser, requireRole("Admin"), getAllUsers);

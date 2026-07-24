@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Navigation,
   RefreshCw,
+  LogOut,
+  Sparkles,
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
 import { getUserRideHistoryApi } from "../services/api";
@@ -28,6 +30,13 @@ const DriverDashboard = () => {
   const [isAvailable, setIsAvailable] = useState(true);
   const [driverRides, setDriverRides] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [transferNotification, setTransferNotification] = useState({
+    active: true,
+    type: "transfer_requested",
+    passengerName: "Sarah Connor",
+    transferPoint: "Exit 14 Highway Gas Station Rendezvous Intersection",
+    estimatedArrival: "6 mins",
+  });
 
   useEffect(() => {
     fetchDriverRides();
@@ -103,6 +112,40 @@ const DriverDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Driver Transfer Notifications Banner (Part 5 - Driver Notifications) */}
+      {transferNotification.active && (
+        <div className="p-6 rounded-3xl glass-card border border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-950 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <Zap className="w-5 h-5 text-amber-400 animate-pulse" />
+              <h3 className="text-base font-bold text-white">Driver Transfer Notification</h3>
+            </div>
+            <button
+              onClick={() => setTransferNotification({ ...transferNotification, active: false })}
+              className="text-xs text-slate-400 hover:text-slate-200"
+            >
+              Dismiss
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {/* Current Driver Transfer Notification */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs text-slate-300">
+              <p className="font-bold text-amber-300 uppercase text-[10px] tracking-wider">Current Driver Alert</p>
+              <p className="text-white font-medium">Passenger requested ride transfer.</p>
+              <p className="text-slate-400">Proceed to transfer point: <strong>{transferNotification.transferPoint}</strong></p>
+            </div>
+
+            {/* New Driver Assigned Notification */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs text-slate-300">
+              <p className="font-bold text-emerald-400 uppercase text-[10px] tracking-wider">New Driver Assignment</p>
+              <p className="text-white font-medium">New passenger assigned ({transferNotification.passengerName}).</p>
+              <p className="text-slate-400">Pickup Location: <strong>Transfer Point</strong> • ETA: <strong>{transferNotification.estimatedArrival}</strong></p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Driver Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
