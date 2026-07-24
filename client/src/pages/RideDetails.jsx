@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Car, MapPin, Clock, Users, ShieldCheck, Zap, ArrowLeft, CheckCircle2, Phone, Mail } from "lucide-react";
+import { Car, MapPin, Clock, Users, ShieldCheck, Zap, ArrowLeft, CheckCircle2, Phone, Mail, AlertTriangle } from "lucide-react";
 import { getRideByIdApi } from "../services/api";
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
@@ -9,6 +9,7 @@ const RideDetails = () => {
   const { id } = useParams();
   const [ride, setRide] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (id) {
@@ -19,29 +20,44 @@ const RideDetails = () => {
   const fetchRide = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await getRideByIdApi(id);
       if (res.data?.ride) {
         setRide(res.data.ride);
+      } else {
+        setError("Ride record not found in database.");
       }
     } catch (err) {
       console.error("Fetch ride details error:", err);
+      setError(err.response?.data?.message || "Failed to fetch ride details from database.");
     } finally {
       setLoading(false);
     }
   };
 
-  const defaultRide = ride || {
-    driverName: "Alex Rivera",
-    vehicleDetails: { make: "Toyota", model: "Prius", plate: "RT-8842", color: "Silver" },
-    origin: "Downtown Technology Hub",
-    destination: "Airport Terminal 2",
-    departureTime: "Immediate",
-    seatsAvailable: 2,
-    pricePerSeat: 18,
-    status: "active",
-    dynamicSwitchSuggested: true,
-    passengers: [{ name: "Sarah Connor", pickup: "Tech Hub", dropoff: "Airport T2" }],
-  };
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-16 text-center text-xs text-indigo-400 glass-card rounded-3xl animate-pulse">
+        Fetching ride details from MongoDB Atlas...
+      </div>
+    );
+  }
+
+  if (error || !ride) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-16 text-center space-y-4 glass-card rounded-3xl">
+        <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto" />
+        <h3 className="text-xl font-bold text-white">Ride Not Found</h3>
+        <p className="text-xs text-slate-400 max-w-md mx-auto">{error || "The requested ride does not exist in database."}</p>
+        <Link
+          to="/dashboard"
+          className="inline-block px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500"
+        >
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -58,30 +74,32 @@ const RideDetails = () => {
         <div>
           <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400 mb-1">
             <CheckCircle2 className="w-4 h-4" />
-            <span className="uppercase tracking-wider">Ride Status: {defaultRide.status}</span>
+            <span className="uppercase tracking-wider">Ride Status: {ride.status}</span>
           </div>
           <h1 className="text-3xl font-black text-white">
-            {defaultRide.origin} ➔ {defaultRide.destination}
+            {ride.origin} ➔ {ride.destination}
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Driver: {defaultRide.driverName} • Vehicle: {defaultRide.vehicleDetails?.make} {defaultRide.vehicleDetails?.model} ({defaultRide.vehicleDetails?.plate})
+            Driver: {ride.driverName} • Vehicle: {ride.vehicleDetails?.make} {ride.vehicleDetails?.model} ({ride.vehicleDetails?.plate})
           </p>
         </div>
 
         <div className="text-right">
-          <span className="text-3xl font-black text-emerald-400 font-mono">${defaultRide.pricePerSeat}</span>
+          <span className="text-3xl font-black text-emerald-400 font-mono">${ride.pricePerSeat}</span>
           <p className="text-[11px] text-slate-400">Fare per seat</p>
         </div>
       </div>
 
       {/* Dynamic Switch Alert overlay if present */}
-      {defaultRide.dynamicSwitchSuggested && (
+      {ride.dynamicSwitchSuggested && (
         <TaxiSwitchCard
-          passengerName="Sarah Connor"
-          currentTaxi="Taxi A (Toyota Prius • RT-8842)"
-          targetTaxi="Taxi B (Tesla Model 3 • EV-9901)"
-          driverBName="Marcus Vance"
-          timeSaved={14}
+          rideId={ride._id}
+          passengerName={ride.switchDetails?.passengerName || "Passenger"}
+          currentTaxi={`Taxi A (${ride.driverName})`}
+          targetTaxi={ride.switchDetails?.targetVehiclePlate || "Taxi B"}
+          driverBName={ride.switchDetails?.targetTaxiDriverName || "Nearby Driver"}
+          timeSaved={ride.switchDetails?.etaSavedMinutes || 12}
+          onAccept={fetchRide}
         />
       )}
 
@@ -96,10 +114,10 @@ const RideDetails = () => {
             </h3>
 
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
-              <p><strong>Host:</strong> {defaultRide.driverName}</p>
-              <p><strong>Vehicle:</strong> {defaultRide.vehicleDetails?.color} {defaultRide.vehicleDetails?.make} {defaultRide.vehicleDetails?.model}</p>
-              <p><strong>Plate Registration:</strong> <span className="font-mono text-indigo-400">{defaultRide.vehicleDetails?.plate}</span></p>
-              <p><strong>Seats Available:</strong> {defaultRide.seatsAvailable}</p>
+              <p><strong>Host:</strong> {ride.driverName}</p>
+              <p><strong>Vehicle:</strong> {ride.vehicleDetails?.color} {ride.vehicleDetails?.make} {ride.vehicleDetails?.model}</p>
+              <p><strong>Plate Registration:</strong> <span className="font-mono text-indigo-400">{ride.vehicleDetails?.plate}</span></p>
+              <p><strong>Seats Available:</strong> {ride.seatsAvailable}</p>
             </div>
           </div>
 
@@ -107,15 +125,19 @@ const RideDetails = () => {
           <div className="glass-card border border-slate-800 rounded-3xl p-6 space-y-3">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-purple-400" />
-              <span>Confirmed Passengers</span>
+              <span>Confirmed Passengers ({ride.passengers?.length || 0})</span>
             </h3>
 
-            {defaultRide.passengers?.map((p, idx) => (
-              <div key={idx} className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1">
-                <p className="font-bold text-white">{p.name}</p>
-                <p className="text-slate-400">Pickup: {p.pickup} ➔ Dropoff: {p.dropoff}</p>
-              </div>
-            ))}
+            {ride.passengers?.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-2">No passengers booked yet.</p>
+            ) : (
+              ride.passengers?.map((p, idx) => (
+                <div key={idx} className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1">
+                  <p className="font-bold text-white">{p.name}</p>
+                  <p className="text-slate-400">Pickup: {p.pickup} ➔ Dropoff: {p.dropoff}</p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -124,10 +146,10 @@ const RideDetails = () => {
           <h3 className="text-lg font-bold text-white">Live OpenStreetMap Rerouting View</h3>
           <LiveMap
             height="440px"
-            center={{ lat: 12.9716, lng: 77.5946 }}
+            center={{ lat: ride.originCoords?.lat || 12.9716, lng: ride.originCoords?.lng || 77.5946 }}
             zoom={13}
-            drivers={[{ name: defaultRide.driverName, vehicle: `${defaultRide.vehicleDetails?.make} ${defaultRide.vehicleDetails?.model}` }]}
-            switchAlert={defaultRide.dynamicSwitchSuggested}
+            drivers={[{ name: ride.driverName, vehicle: `${ride.vehicleDetails?.make} ${ride.vehicleDetails?.model}` }]}
+            switchAlert={ride.dynamicSwitchSuggested}
           />
         </div>
       </div>

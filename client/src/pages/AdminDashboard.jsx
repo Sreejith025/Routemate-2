@@ -22,9 +22,9 @@ const AdminDashboard = () => {
   const { dbUser, role } = useAuthContext();
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({
-    users: { total: 18, drivers: 6, passengers: 11, admins: 1 },
-    rides: { total: 42, active: 5, scheduled: 12, completed: 25, dynamicSwitches: 14 },
-    systemEfficiency: { avgTimeSavedMinutes: 12.5, co2ReducedKg: 340, activeTrafficAlerts: 3 },
+    users: { total: 0, drivers: 0, passengers: 0, admins: 0 },
+    rides: { total: 0, active: 0, scheduled: 0, completed: 0, dynamicSwitches: 0 },
+    systemEfficiency: { avgTimeSavedMinutes: 0, co2ReducedKg: 0, activeTrafficAlerts: 0 },
   });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -104,7 +104,7 @@ const AdminDashboard = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider">Total Users</span>
             <Users className="w-4 h-4 text-indigo-400" />
           </div>
-          <p className="text-3xl font-extrabold text-white">{users.length || stats.users.total}</p>
+          <p className="text-3xl font-extrabold text-white">{users.length}</p>
           <p className="text-[11px] text-slate-400">MongoDB Synced</p>
         </div>
 
@@ -159,12 +159,6 @@ const AdminDashboard = () => {
           height="380px"
           center={{ lat: 12.9716, lng: 77.5946 }}
           zoom={12}
-          drivers={[
-            { name: "Driver 1 (Taxi A)", vehicle: "Toyota Prius", lat: 12.975, lng: 77.595 },
-            { name: "Driver 2 (Taxi B)", vehicle: "Tesla Model 3", lat: 12.945, lng: 77.625 },
-            { name: "Driver 3 (Taxi C)", vehicle: "Honda Civic", lat: 12.92, lng: 77.58 },
-          ]}
-          passengers={[{ name: "Passenger Sarah", lat: 12.96, lng: 77.6 }]}
           switchAlert={true}
         />
       </div>

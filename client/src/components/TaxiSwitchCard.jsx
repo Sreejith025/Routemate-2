@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { Zap, Clock, ShieldCheck, ArrowRight, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import { respondSwitchApi } from "../services/api";
+import toast from "react-hot-toast";
 
 const TaxiSwitchCard = ({
-  passengerName = "Sarah Connor",
+  rideId,
+  passengerName = "Passenger",
   currentTaxi = "Taxi A (Toyota Prius • RT-8842)",
   targetTaxi = "Taxi B (Tesla Model 3 • EV-9901)",
   driverBName = "Marcus Vance",
@@ -13,17 +16,34 @@ const TaxiSwitchCard = ({
 }) => {
   const [status, setStatus] = useState("pending"); // pending, accepting, accepted, declined
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     setStatus("accepting");
-    setTimeout(() => {
+    try {
+      if (rideId) {
+        await respondSwitchApi(rideId, { action: "accept" });
+      }
       setStatus("accepted");
+      toast.success("Taxi switch accepted! Updated in database.");
       if (onAccept) onAccept();
-    }, 1200);
+    } catch (err) {
+      console.error("Switch error:", err);
+      toast.error("Failed to execute taxi switch");
+      setStatus("pending");
+    }
   };
 
-  const handleDecline = () => {
-    setStatus("declined");
-    if (onDecline) onDecline();
+  const handleDecline = async () => {
+    try {
+      if (rideId) {
+        await respondSwitchApi(rideId, { action: "decline" });
+      }
+      setStatus("declined");
+      toast("Taxi switch declined.");
+      if (onDecline) onDecline();
+    } catch (err) {
+      console.error("Switch error:", err);
+      setStatus("declined");
+    }
   };
 
   if (status === "accepted") {
@@ -131,7 +151,7 @@ const TaxiSwitchCard = ({
       <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
         <div className="flex items-center text-xs text-slate-400 space-x-1.5">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Passenger A fare guaranteed unchanged</span>
+          <span>Passenger fare guaranteed unchanged</span>
         </div>
 
         <div className="flex items-center space-x-3">

@@ -19,31 +19,42 @@ import {
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
-import { getAvailableRidesApi } from "../services/api";
+import { getAvailableRidesApi, getUserRideHistoryApi } from "../services/api";
 
 const Dashboard = () => {
   const { dbUser, clerkUser, role } = useAuthContext();
   const [rides, setRides] = useState([]);
+  const [userHistory, setUserHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [switchAlertActive, setSwitchAlertActive] = useState(true);
 
   useEffect(() => {
-    fetchRides();
+    fetchDashboardData();
   }, []);
 
-  const fetchRides = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const res = await getAvailableRidesApi();
-      if (res.data?.rides) {
-        setRides(res.data.rides);
+      const [ridesRes, historyRes] = await Promise.allSettled([
+        getAvailableRidesApi(),
+        getUserRideHistoryApi(),
+      ]);
+
+      if (ridesRes.status === "fulfilled" && ridesRes.value.data?.rides) {
+        setRides(ridesRes.value.data.rides);
+      }
+      if (historyRes.status === "fulfilled" && historyRes.value.data?.history) {
+        setUserHistory(historyRes.value.data.history);
       }
     } catch (err) {
-      console.error("Dashboard fetch rides error:", err);
+      console.error("Dashboard fetch error:", err);
     } finally {
       setLoading(false);
     }
   };
+
+  const activeRides = userHistory.filter((r) => r.status === "active" || r.status === "scheduled");
+  const completedRides = userHistory.filter((r) => r.status === "completed");
+  const activeSwitchRide = userHistory.find((r) => r.dynamicSwitchSuggested || r.switchDetails?.status === "pending");
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -68,7 +79,7 @@ const Dashboard = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                {dbUser?.email || clerkUser?.primaryEmailAddress?.emailAddress} • Account Status: Active
+                {dbUser?.email || clerkUser?.primaryEmailAddress?.emailAddress} • MongoDB Synced
               </p>
             </div>
           </div>
@@ -92,29 +103,24 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Dynamic Taxi Switch Live Recommendation Banner */}
-      {switchAlertActive && (
+      {/* Dynamic Taxi Switch Live Alert Banner (If triggered on an active ride) */}
+      {activeSwitchRide && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
               <Zap className="w-4 h-4 fill-current animate-pulse" />
-              <span>Live Active Trip Monitor</span>
+              <span>Active Trip Recommendation</span>
             </h3>
-            <button
-              onClick={() => setSwitchAlertActive(false)}
-              className="text-xs text-slate-400 hover:text-slate-200"
-            >
-              Dismiss
-            </button>
           </div>
           <TaxiSwitchCard
-            passengerName={dbUser?.fullName || "Sarah Connor"}
-            currentTaxi="Taxi A (Toyota Prius • RT-8842)"
-            targetTaxi="Taxi B (Tesla Model 3 • EV-9901)"
-            driverBName="Marcus Vance"
-            delayReason="Expressway Gridlock (+18m delay)"
-            timeSaved={14}
-            onAccept={() => console.log("Switch accepted")}
+            rideId={activeSwitchRide._id}
+            passengerName={dbUser?.fullName || "Passenger"}
+            currentTaxi={`Taxi A (${activeSwitchRide.driverName})`}
+            targetTaxi={activeSwitchRide.switchDetails?.targetVehiclePlate || "Taxi B (Express)"}
+            driverBName={activeSwitchRide.switchDetails?.targetTaxiDriverName || "Nearby Driver"}
+            delayReason={activeSwitchRide.switchDetails?.reason || "Traffic delay ahead"}
+            timeSaved={activeSwitchRide.switchDetails?.etaSavedMinutes || 12}
+            onAccept={fetchDashboardData}
           />
         </div>
       )}
@@ -123,31 +129,31 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Active Trip</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Active Commutes</span>
             <Clock className="w-5 h-5 text-indigo-400" />
           </div>
-          <p className="text-3xl font-extrabold text-white">1</p>
-          <p className="text-xs text-emerald-400 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> En-route to Airport
+          <p className="text-3xl font-extrabold text-white">{activeRides.length}</p>
+          <p className="text-xs text-emerald-400 font-bold">
+            {activeRides.length > 0 ? "Trip En-route" : "No current active rides"}
           </p>
         </div>
 
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Time Saved</span>
-            <Zap className="w-5 h-5 text-amber-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Rides</span>
+            <Car className="w-5 h-5 text-purple-400" />
           </div>
-          <p className="text-3xl font-extrabold text-amber-400 font-mono">42 Mins</p>
-          <p className="text-xs text-slate-400">Via 3 Intelligent Taxi Switches</p>
+          <p className="text-3xl font-extrabold text-white">{userHistory.length}</p>
+          <p className="text-xs text-slate-400">MongoDB Database Records</p>
         </div>
 
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Completed Rides</span>
-            <Car className="w-5 h-5 text-purple-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Completed Trips</span>
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           </div>
-          <p className="text-3xl font-extrabold text-white">8</p>
-          <p className="text-xs text-slate-400">Shared Commutes</p>
+          <p className="text-3xl font-extrabold text-emerald-400 font-mono">{completedRides.length}</p>
+          <p className="text-xs text-slate-400">Safely Arrived</p>
         </div>
 
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
@@ -158,7 +164,7 @@ const Dashboard = () => {
           <p className="text-lg font-bold text-emerald-400 flex items-center gap-1.5 pt-1">
             <Award className="w-5 h-5" /> Verified
           </p>
-          <p className="text-xs text-slate-500">Clerk Auth Synced</p>
+          <p className="text-xs text-slate-500">Clerk & MongoDB Synced</p>
         </div>
       </div>
 
@@ -171,14 +177,14 @@ const Dashboard = () => {
               <MapPin className="w-5 h-5 text-indigo-400" />
               <span>Live OpenStreetMap Telemetry</span>
             </h3>
-            <span className="text-xs text-slate-400 font-mono">Live Sync</span>
+            <span className="text-xs text-emerald-400 font-mono font-bold">DATABASE CONNECTED</span>
           </div>
 
           <LiveMap
             height="420px"
             center={{ lat: 12.9716, lng: 77.5946 }}
             zoom={13}
-            drivers={rides.map((r, i) => ({
+            drivers={rides.map((r) => ({
               name: r.driverName,
               vehicle: `${r.vehicleDetails?.make} ${r.vehicleDetails?.model}`,
               lat: r.originCoords?.lat,
@@ -192,7 +198,7 @@ const Dashboard = () => {
         <div className="lg:col-span-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-white">Nearby RouteMate Taxis</h3>
-            <button onClick={fetchRides} className="text-xs text-indigo-400 hover:underline flex items-center gap-1">
+            <button onClick={fetchDashboardData} className="text-xs text-indigo-400 hover:underline flex items-center gap-1">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
             </button>
           </div>
