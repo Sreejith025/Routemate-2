@@ -14,7 +14,11 @@ import {
   UserPlus,
   Menu,
   X,
-  ShieldAlert,
+  Zap,
+  Info,
+  Layers,
+  Phone,
+  Settings,
 } from "lucide-react";
 
 const Navbar = () => {
@@ -37,6 +41,9 @@ const Navbar = () => {
     { name: "Home", path: "/", icon: Home, show: true },
     { name: "Find Ride", path: "/find-ride", icon: Search, show: true },
     { name: "Offer Ride", path: "/offer-ride", icon: PlusCircle, show: true },
+    { name: "Taxi Switching", path: "/taxi-switching", icon: Zap, show: true, highlight: true },
+    { name: "Features", path: "/features", icon: Layers, show: true },
+    { name: "About", path: "/about", icon: Info, show: true },
     {
       name: "Dashboard",
       path: getDashboardLink(),
@@ -56,8 +63,8 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-200">
+          <Link to="/" className="flex items-center space-x-3 group shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-amber-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-200">
               <Car className="w-6 h-6 text-white" />
             </div>
             <span className="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
@@ -66,7 +73,7 @@ const Navbar = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-1">
+          <nav className="hidden lg:flex items-center space-x-1">
             {navLinks
               .filter((link) => link.show)
               .map((link) => {
@@ -76,13 +83,15 @@ const Navbar = () => {
                   <Link
                     key={link.path}
                     to={link.path}
-                    className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
                       active
                         ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm"
+                        : link.highlight
+                        ? "text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 bg-amber-500/5 animate-pulse-glow"
                         : "text-slate-300 hover:text-white hover:bg-slate-800/60"
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className={`w-3.5 h-3.5 ${link.highlight ? "text-amber-400" : ""}`} />
                     <span>{link.name}</span>
                   </Link>
                 );
@@ -90,12 +99,12 @@ const Navbar = () => {
           </nav>
 
           {/* Desktop User / Auth Actions */}
-          <div className="hidden md:flex items-center space-x-3">
+          <div className="hidden lg:flex items-center space-x-3">
             {isSignedIn ? (
-              <div className="flex items-center space-x-3 bg-slate-900/80 p-1.5 pl-3 rounded-full border border-slate-800">
+              <div className="flex items-center space-x-2.5 bg-slate-900/80 p-1.5 pl-3 rounded-full border border-slate-800">
                 {/* Role Badge */}
                 <span
-                  className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                  className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
                     role === "Driver"
                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                       : role === "Admin"
@@ -105,6 +114,14 @@ const Navbar = () => {
                 >
                   {role || "Passenger"}
                 </span>
+
+                <Link
+                  to="/settings"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </Link>
 
                 <UserButton
                   afterSignOutUrl="/"
@@ -121,21 +138,21 @@ const Navbar = () => {
                   title="Sign Out"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Sign Out</span>
+                  <span>Logout</span>
                 </button>
               </div>
             ) : (
               <div className="flex items-center space-x-2">
                 <Link
                   to="/sign-in"
-                  className="flex items-center space-x-1.5 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors"
+                  className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Sign In</span>
                 </Link>
                 <Link
                   to="/sign-up"
-                  className="flex items-center space-x-1.5 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-lg shadow-md shadow-indigo-600/30 transition-all hover:scale-[1.02]"
+                  className="flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-lg shadow-md shadow-indigo-600/30 transition-all hover:scale-[1.02]"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>Get Started</span>
@@ -145,18 +162,14 @@ const Navbar = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center space-x-2">
+          <div className="lg:hidden flex items-center space-x-2">
             {isSignedIn && <UserButton afterSignOutUrl="/" />}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
               aria-label="Toggle menu"
             >
-              {mobileMenuOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
@@ -164,7 +177,7 @@ const Navbar = () => {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-xl px-4 pt-3 pb-6 space-y-2">
+        <div className="lg:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-xl px-4 pt-3 pb-6 space-y-2">
           {navLinks
             .filter((link) => link.show)
             .map((link) => {
@@ -175,9 +188,11 @@ const Navbar = () => {
                   key={link.path}
                   to={link.path}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     active
                       ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                      : link.highlight
+                      ? "text-amber-400 bg-amber-500/10 border border-amber-500/30 font-bold"
                       : "text-slate-300 hover:bg-slate-900 hover:text-white"
                   }`}
                 >
@@ -187,6 +202,26 @@ const Navbar = () => {
               );
             })}
 
+          <Link
+            to="/contact"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-900"
+          >
+            <Phone className="w-5 h-5" />
+            <span>Contact & Support</span>
+          </Link>
+
+          {isSignedIn && (
+            <Link
+              to="/settings"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-900"
+            >
+              <Settings className="w-5 h-5" />
+              <span>Settings</span>
+            </Link>
+          )}
+
           <div className="pt-4 border-t border-slate-800">
             {isSignedIn ? (
               <button
@@ -194,7 +229,7 @@ const Navbar = () => {
                   setMobileMenuOpen(false);
                   handleSignOut();
                 }}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg text-base font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors"
+                className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg text-sm font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors"
               >
                 <LogOut className="w-5 h-5" />
                 <span>Sign Out</span>

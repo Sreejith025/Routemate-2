@@ -27,4 +27,22 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// User APIs
+export const syncUserApi = (userData) => api.post("/users/sync", userData);
+export const getCurrentUserApi = () => api.get("/users/me");
+export const updateProfileApi = (profileData) => api.put("/users/profile", profileData);
+export const getAllUsersApi = () => api.get("/users");
+
+// Ride APIs
+export const getAvailableRidesApi = (params) => api.get("/rides", { params });
+export const getRideByIdApi = (id) => api.get(`/rides/${id}`);
+export const createRideApi = (rideData) => api.post("/rides", rideData);
+export const bookRideApi = (id, bookingData) => api.post(`/rides/${id}/book`, bookingData);
+export const triggerSwitchApi = (id, switchData) => api.post(`/rides/${id}/trigger-switch`, switchData);
+export const respondSwitchApi = (id, actionData) => api.post(`/rides/${id}/respond-switch`, actionData);
+export const getUserRideHistoryApi = () => api.get("/rides/history/all");
+
+// Dashboard APIs
+export const getDashboardStatsApi = () => api.get("/dashboard/stats");
+
 export default api;
