@@ -3,14 +3,21 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 
 import Landing from "../pages/Landing";
+import About from "../pages/About";
+import Features from "../pages/Features";
+import Contact from "../pages/Contact";
+import TaxiSwitching from "../pages/TaxiSwitching";
 import SignInPage from "../pages/SignInPage";
 import SignUpPage from "../pages/SignUpPage";
 import Dashboard from "../pages/Dashboard";
 import DriverDashboard from "../pages/DriverDashboard";
 import AdminDashboard from "../pages/AdminDashboard";
 import ProfilePage from "../pages/ProfilePage";
+import SettingsPage from "../pages/SettingsPage";
 import FindRide from "../pages/FindRide";
 import OfferRide from "../pages/OfferRide";
+import RideDetails from "../pages/RideDetails";
+import RideHistory from "../pages/RideHistory";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -20,6 +27,10 @@ const AppRoutes = () => {
       <Route element={<MainLayout />}>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/taxi-switching" element={<TaxiSwitching />} />
         <Route path="/sign-in/*" element={<SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
         <Route path="/find-ride" element={<FindRide />} />
@@ -61,6 +72,34 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected User Settings */}
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Ride Details & History */}
+        <Route
+          path="/rides/:id"
+          element={
+            <ProtectedRoute>
+              <RideDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ride-history"
+          element={
+            <ProtectedRoute>
+              <RideHistory />
             </ProtectedRoute>
           }
         />
