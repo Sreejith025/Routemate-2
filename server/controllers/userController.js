@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import { isAdminEmail } from "../config/adminEmails.js";
 
 /**
  * Synchronize Clerk authenticated user with MongoDB.
@@ -6,14 +7,16 @@ import User from "../models/User.js";
  */
 export const syncUser = async (req, res) => {
   try {
-    const { userId } = req.auth;
     const { fullName, email, profileImage, phone, role } = req.body;
+    const userId = req.auth?.userId || req.body?.clerkId || req.body?.userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
     let user = await User.findOne({ clerkId: userId });
+    const userEmail = email || user?.email || "";
+    const isAuthorizedAdmin = isAdminEmail(userEmail);
 
     if (user) {
       // Update existing user details if changed
@@ -29,6 +32,21 @@ export const syncUser = async (req, res) => {
       if (profileImage && user.profileImage !== profileImage) {
         user.profileImage = profileImage;
         isModified = true;
+      }
+
+      // Automatically grant Admin role if email matches authorized admin list
+      if (isAuthorizedAdmin) {
+        if (!user.isAdmin || user.role !== "Admin") {
+          user.isAdmin = true;
+          user.role = "Admin";
+          isModified = true;
+        }
+      } else {
+        if (user.isAdmin) {
+          user.isAdmin = false;
+          if (user.role === "Admin") user.role = "Passenger";
+          isModified = true;
+        }
       }
 
       if (isModified) {
@@ -49,7 +67,8 @@ export const syncUser = async (req, res) => {
       email: email || "",
       profileImage: profileImage || "",
       phone: phone || "",
-      role: role || "Passenger",
+      role: isAuthorizedAdmin ? "Admin" : (role || "Passenger"),
+      isAdmin: isAuthorizedAdmin,
     });
 
     return res.status(201).json({
@@ -98,7 +117,7 @@ export const getCurrentUser = async (req, res) => {
  */
 export const updateProfile = async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const userId = req.auth?.userId || req.body?.clerkId || req.body?.userId;
     const { fullName, phone, role } = req.body;
 
     const user = await User.findOne({ clerkId: userId });
@@ -128,6 +147,65 @@ export const updateProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update profile",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update passenger ride preferences, gender, and safety preference
+ */
+export const updateUserPreferences = async (req, res) => {
+  try {
+    const userId = req.auth?.userId || req.body?.clerkId || req.body?.userId || "demo_passenger_id";
+    const { ridePreference, gender, safetyPreference } = req.body;
+
+    let user = await User.findOne({ clerkId: userId });
+
+    if (!user) {
+      // Find any existing user or create a fallback record
+      const existingUser = await User.findOne({});
+      user = existingUser || new User({
+        clerkId: userId,
+        fullName: req.body?.fullName || "RouteMate Passenger",
+        email: req.body?.email || "passenger@routemate.com",
+      });
+    }
+
+    if (ridePreference && ["shared", "private", "safety"].includes(ridePreference)) {
+      user.ridePreference = ridePreference;
+    }
+
+    if (gender && ["male", "female", "other", "prefer_not_to_say"].includes(gender)) {
+      user.gender = gender;
+    }
+
+    if (
+      safetyPreference &&
+      ["femalePassengersOnly", "femaleDriverOnly", "femaleDriverAndPassengers", "noPreference"].includes(
+        safetyPreference
+      )
+    ) {
+      user.safetyPreference = safetyPreference;
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Ride preferences updated successfully",
+      preferences: {
+        ridePreference: user.ridePreference,
+        gender: user.gender,
+        safetyPreference: user.safetyPreference,
+      },
+      user,
+    });
+  } catch (error) {
+    console.error("Update User Preferences Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update preferences",
       error: error.message,
     });
   }

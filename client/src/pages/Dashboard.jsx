@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
+import RideControlsSection from "../components/RideControlsSection";
 import { getAvailableRidesApi, getUserRideHistoryApi } from "../services/api";
 
 const Dashboard = () => {
@@ -123,6 +124,15 @@ const Dashboard = () => {
             onAccept={fetchDashboardData}
           />
         </div>
+      )}
+
+      {/* Active Shared Ride Controls (PART 3) */}
+      {activeRides.length > 0 && (
+        <RideControlsSection
+          ride={activeRides[0]}
+          passengerId={clerkUser?.id || dbUser?.clerkId}
+          onRideUpdated={fetchDashboardData}
+        />
       )}
 
       {/* Metrics Row */}

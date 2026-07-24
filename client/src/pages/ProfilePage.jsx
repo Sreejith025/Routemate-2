@@ -15,6 +15,8 @@ import {
   UserCheck,
 } from "lucide-react";
 
+import RidePreferencesCard from "../components/RidePreferencesCard";
+
 const ProfilePage = () => {
   const { clerkUser, dbUser, updateProfile, loading: authLoading } = useAuthContext();
 
@@ -282,6 +284,18 @@ const ProfilePage = () => {
             </div>
           </form>
         </div>
+      </div>
+
+      {/* Ride Preferences Section (PART 1) */}
+      <div className="pt-6 border-t border-slate-800">
+        <RidePreferencesCard
+          initialPreferences={{
+            ridePreference: dbUser?.ridePreference || "shared",
+            gender: dbUser?.gender || "prefer_not_to_say",
+            safetyPreference: dbUser?.safetyPreference || "noPreference",
+          }}
+          showActions={true}
+        />
       </div>
     </div>
   );

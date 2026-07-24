@@ -50,6 +50,10 @@ export const requireRole = (...roles) => {
       });
     }
 
+    if (req.mongoUser.role === "Admin" || req.mongoUser.isAdmin) {
+      return next();
+    }
+
     if (!roles.includes(req.mongoUser.role)) {
       return res.status(403).json({
         success: false,

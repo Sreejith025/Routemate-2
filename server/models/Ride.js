@@ -68,11 +68,15 @@ const rideSchema = new mongoose.Schema(
       default: false,
     },
     switchDetails: {
+      passengerId: String,
       passengerName: String,
-      reason: String,
-      etaSavedMinutes: Number,
+      targetRideId: String,
+      targetDriverId: String,
       targetTaxiDriverName: String,
       targetVehiclePlate: String,
+      etaSavedMinutes: Number,
+      switchingScore: Number,
+      reason: String,
       status: {
         type: String,
         enum: ["pending", "accepted", "declined", "completed"],

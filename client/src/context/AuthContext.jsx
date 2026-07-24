@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import api from "../services/api";
+import { isAdminEmail } from "../config/adminEmails";
 
 const AuthContext = createContext(null);
 
@@ -11,6 +12,10 @@ export const AuthProvider = ({ children }) => {
   const [dbUser, setDbUser] = useState(null);
   const [dbLoading, setDbLoading] = useState(true);
   const [syncError, setSyncError] = useState(null);
+
+  const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || "";
+  const isAdmin = Boolean(dbUser?.isAdmin || isAdminEmail(userEmail));
+  const role = isAdmin ? "Admin" : (dbUser?.role || "Passenger");
 
   // Sync user with backend MongoDB database
   const syncUserWithBackend = useCallback(async () => {
@@ -105,7 +110,8 @@ export const AuthProvider = ({ children }) => {
     isSignedIn,
     clerkUser: user,
     dbUser,
-    role: dbUser?.role || "Passenger",
+    isAdmin,
+    role,
     loading: !isLoaded || dbLoading,
     syncError,
     refreshUser: fetchDbUser,

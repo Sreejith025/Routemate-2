@@ -19,10 +19,12 @@ import {
   Layers,
   Phone,
   Settings,
+  ShieldAlert,
+  Clock,
 } from "lucide-react";
 
 const Navbar = () => {
-  const { isSignedIn, dbUser, role } = useAuthContext();
+  const { isSignedIn, dbUser, role, isAdmin } = useAuthContext();
   const { signOut } = useClerk();
   const location = useLocation();
   const navigate = useNavigate();
@@ -30,28 +32,36 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
-  // Determine dashboard link based on role
+  // Primary Dashboard Link
   const getDashboardLink = () => {
+    if (isAdmin || role === "Admin") return "/admin";
     if (role === "Driver") return "/driver";
-    if (role === "Admin") return "/admin";
     return "/dashboard";
   };
 
-  const navLinks = [
+  // Passenger Nav Links
+  const passengerLinks = [
     { name: "Home", path: "/", icon: Home, show: true },
+    { name: "Passenger Hub", path: "/dashboard", icon: LayoutDashboard, show: isSignedIn },
+    { name: "Find Ride", path: "/find-ride", icon: Search, show: true },
+    { name: "Ride History", path: "/ride-history", icon: Clock, show: isSignedIn },
+    { name: "Taxi Switching", path: "/taxi-switching", icon: Zap, show: true, highlight: true },
+    { name: "Features", path: "/features", icon: Layers, show: true },
+    { name: "Profile", path: "/profile", icon: User, show: isSignedIn },
+  ];
+
+  // Admin Nav Links (Full Access to All Dashboards & Features)
+  const adminLinks = [
+    { name: "Admin Console", path: "/admin", icon: ShieldAlert, show: true, highlightAdmin: true },
+    { name: "Passenger Hub", path: "/dashboard", icon: LayoutDashboard, show: true },
+    { name: "Driver Hub", path: "/driver", icon: Car, show: true },
     { name: "Find Ride", path: "/find-ride", icon: Search, show: true },
     { name: "Offer Ride", path: "/offer-ride", icon: PlusCircle, show: true },
     { name: "Taxi Switching", path: "/taxi-switching", icon: Zap, show: true, highlight: true },
     { name: "Features", path: "/features", icon: Layers, show: true },
-    { name: "About", path: "/about", icon: Info, show: true },
-    {
-      name: "Dashboard",
-      path: getDashboardLink(),
-      icon: LayoutDashboard,
-      show: isSignedIn,
-    },
-    { name: "Profile", path: "/profile", icon: User, show: isSignedIn },
   ];
+
+  const navLinks = isAdmin || role === "Admin" ? adminLinks : passengerLinks;
 
   const handleSignOut = async () => {
     await signOut();
@@ -63,7 +73,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-3 group shrink-0">
+          <Link to={getDashboardLink()} className="flex items-center space-x-3 group shrink-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-amber-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-200">
               <Car className="w-6 h-6 text-white" />
             </div>
@@ -86,12 +96,14 @@ const Navbar = () => {
                     className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
                       active
                         ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm"
+                        : link.highlightAdmin
+                        ? "bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm"
                         : link.highlight
                         ? "text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 bg-amber-500/5 animate-pulse-glow"
                         : "text-slate-300 hover:text-white hover:bg-slate-800/60"
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${link.highlight ? "text-amber-400" : ""}`} />
+                    <Icon className={`w-3.5 h-3.5 ${link.highlightAdmin ? "text-purple-400" : link.highlight ? "text-amber-400" : ""}`} />
                     <span>{link.name}</span>
                   </Link>
                 );
@@ -105,14 +117,14 @@ const Navbar = () => {
                 {/* Role Badge */}
                 <span
                   className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                    role === "Driver"
+                    isAdmin || role === "Admin"
+                      ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                      : role === "Driver"
                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                      : role === "Admin"
-                      ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
                       : "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
                   }`}
                 >
-                  {role || "Passenger"}
+                  {isAdmin || role === "Admin" ? "ADMIN" : (role || "Passenger")}
                 </span>
 
                 <Link
@@ -191,6 +203,8 @@ const Navbar = () => {
                   className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     active
                       ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                      : link.highlightAdmin
+                      ? "bg-purple-600/20 text-purple-300 border border-purple-500/30 font-bold"
                       : link.highlight
                       ? "text-amber-400 bg-amber-500/10 border border-amber-500/30 font-bold"
                       : "text-slate-300 hover:bg-slate-900 hover:text-white"
@@ -201,15 +215,6 @@ const Navbar = () => {
                 </Link>
               );
             })}
-
-          <Link
-            to="/contact"
-            onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-900"
-          >
-            <Phone className="w-5 h-5" />
-            <span>Contact & Support</span>
-          </Link>
 
           {isSignedIn && (
             <Link

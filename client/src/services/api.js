@@ -31,6 +31,7 @@ api.interceptors.request.use(
 export const syncUserApi = (userData) => api.post("/users/sync", userData);
 export const getCurrentUserApi = () => api.get("/users/me");
 export const updateProfileApi = (profileData) => api.put("/users/profile", profileData);
+export const updatePreferencesApi = (prefData) => api.put("/user/preferences", prefData);
 export const getAllUsersApi = () => api.get("/users");
 
 // Ride APIs
@@ -40,9 +41,15 @@ export const createRideApi = (rideData) => api.post("/rides", rideData);
 export const bookRideApi = (id, bookingData) => api.post(`/rides/${id}/book`, bookingData);
 export const triggerSwitchApi = (id, switchData) => api.post(`/rides/${id}/trigger-switch`, switchData);
 export const respondSwitchApi = (id, actionData) => api.post(`/rides/${id}/respond-switch`, actionData);
+export const leaveSharedRideApi = (id, data) => api.post(`/rides/${id}/leave-shared-ride`, data);
 export const getUserRideHistoryApi = () => api.get("/rides/history/all");
 
 // Dashboard APIs
 export const getDashboardStatsApi = () => api.get("/dashboard/stats");
+
+// Location APIs
+export const updateLocationApi = (locationData) => api.post("/location/update", locationData);
+export const getRideLocationsApi = (rideId) => api.get(`/location/${rideId}`);
+export const getDriverLocationApi = (driverId) => api.get(`/location/driver/${driverId}`);
 
 export default api;

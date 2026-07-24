@@ -1,15 +1,26 @@
-import React, { useState } from "react";
-import { PlusCircle, MapPin, Calendar, Clock, DollarSign, Users, Car, CheckCircle2 } from "lucide-react";
+import React, { useState, useCallback } from "react";
+import { PlusCircle, MapPin, Car } from "lucide-react";
+import axios from "axios";
 import { useAuthContext } from "../context/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { createRideApi } from "../services/api";
 import LiveMap from "../components/LiveMap";
+import LocationAutocompleteInput from "../components/LocationAutocompleteInput";
+import socket from "../services/socket";
 import toast from "react-hot-toast";
 
 const OfferRide = () => {
-  const { role, dbUser } = useAuthContext();
+  const { role, dbUser, clerkUser } = useAuthContext();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+
+  const [originCoords, setOriginCoords] = useState({ lat: 12.9716, lng: 77.5946 });
+  const [destinationCoords, setDestinationCoords] = useState({ lat: 12.9352, lng: 77.6245 });
+
+  const [routeGeometry, setRouteGeometry] = useState(null);
+  const [distanceKm, setDistanceKm] = useState(null);
+  const [durationMins, setDurationMins] = useState(null);
+
   const [formData, setFormData] = useState({
     origin: "Downtown Technology District",
     destination: "International Airport Terminal 2",
@@ -22,13 +33,62 @@ const OfferRide = () => {
     color: "White",
   });
 
+  const fetchOSRMRoute = useCallback(async (orig, dest) => {
+    if (!orig?.lat || !orig?.lng || !dest?.lat || !dest?.lng) return;
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${orig.lng},${orig.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson`;
+      const res = await axios.get(url);
+      if (res.data?.routes?.[0]) {
+        const route = res.data.routes[0];
+        const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        setRouteGeometry(coords);
+        setDistanceKm((route.distance / 1000).toFixed(1));
+        setDurationMins(Math.round(route.duration / 60));
+      }
+    } catch (err) {
+      console.warn("OSRM routing API error in OfferRide:", err);
+    }
+  }, []);
+
+  const handleSelectOrigin = (loc) => {
+    const name = loc ? loc.name : "";
+    setFormData((prev) => ({ ...prev, origin: name }));
+    if (loc?.lat && loc?.lng) {
+      const coords = { lat: loc.lat, lng: loc.lng };
+      setOriginCoords(coords);
+      fetchOSRMRoute(coords, destinationCoords);
+    }
+  };
+
+  const handleSelectDestination = (loc) => {
+    const name = loc ? loc.name : "";
+    setFormData((prev) => ({ ...prev, destination: name }));
+    if (loc?.lat && loc?.lng) {
+      const coords = { lat: loc.lat, lng: loc.lng };
+      setDestinationCoords(coords);
+      fetchOSRMRoute(originCoords, coords);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
-      await createRideApi({
+
+      const driverName =
+        dbUser?.fullName ||
+        clerkUser?.fullName ||
+        `${clerkUser?.firstName || ""} ${clerkUser?.lastName || ""}`.trim() ||
+        "Verified Driver";
+
+      const res = await createRideApi({
+        driverId: clerkUser?.id || dbUser?.clerkId,
+        driverName,
+        driverPhoto: clerkUser?.imageUrl || dbUser?.profileImage,
         origin: formData.origin,
         destination: formData.destination,
+        originCoords,
+        destinationCoords,
         departureTime: formData.departureTime,
         seatsAvailable: Number(formData.seatsAvailable),
         pricePerSeat: Number(formData.pricePerSeat),
@@ -39,7 +99,14 @@ const OfferRide = () => {
           color: formData.color,
         },
       });
-      toast.success("Ride offer published successfully!");
+
+      if (res.data?.ride) {
+        // Emit Socket.IO event to immediately inform all connected passengers
+        socket.emit("ride-created", res.data.ride);
+        socket.emit("new-ride-published", res.data.ride);
+      }
+
+      toast.success("Ride offer published successfully to MongoDB!");
       navigate("/driver");
     } catch (err) {
       console.error("Create ride error:", err);
@@ -59,7 +126,7 @@ const OfferRide = () => {
         </p>
       </div>
 
-      {role !== "Driver" && (
+      {role !== "Driver" && role !== "Admin" && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
           <span>You are currently registered as a Passenger. Switch role to Driver in your Profile to unlock full hosting features.</span>
           <Link to="/profile" className="font-bold text-amber-400 hover:underline shrink-0 ml-2">Update Profile Role →</Link>
@@ -77,33 +144,45 @@ const OfferRide = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2">Departure Location</label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-indigo-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.origin}
-                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
+                <label className="block text-xs font-bold text-slate-300 mb-2">Departure Location (OpenStreetMap)</label>
+                <LocationAutocompleteInput
+                  value={formData.origin}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, origin: val }))}
+                  onSelectLocation={handleSelectOrigin}
+                  placeholder="Leaving from..."
+                  icon={MapPin}
+                  iconColor="text-indigo-400"
+                  focusBorderColor="focus:border-indigo-500"
+                />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2">Destination Target</label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.destination}
-                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
+                <label className="block text-xs font-bold text-slate-300 mb-2">Destination Target (OpenStreetMap)</label>
+                <LocationAutocompleteInput
+                  value={formData.destination}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, destination: val }))}
+                  onSelectLocation={handleSelectDestination}
+                  placeholder="Going to..."
+                  icon={MapPin}
+                  iconColor="text-emerald-400"
+                  focusBorderColor="focus:border-emerald-500"
+                />
               </div>
             </div>
+
+            {/* Calculated OSRM Distance & Duration Summary Card */}
+            {(distanceKm || durationMins) && (
+              <div className="bg-slate-950 p-3.5 rounded-2xl border border-indigo-500/30 flex items-center justify-between text-xs text-slate-300">
+                <div className="flex items-center gap-2">
+                  <span className="text-indigo-400 font-bold">🛣️ Distance:</span>
+                  <span className="font-mono text-white font-bold">{distanceKm} km</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400 font-bold">⏱️ Travel Time:</span>
+                  <span className="font-mono text-white font-bold">{durationMins} mins</span>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
@@ -193,17 +272,20 @@ const OfferRide = () => {
         <div className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white">Route Preview Map</h3>
-            <span className="text-xs text-slate-400">OpenStreetMap</span>
+            <span className="text-xs text-slate-400">OpenStreetMap & OSRM</span>
           </div>
 
           <LiveMap
             height="460px"
-            center={{ lat: 12.9716, lng: 77.5946 }}
+            center={originCoords}
             zoom={12}
-            route={{
-              origin: { lat: 12.9716, lng: 77.5946 },
-              destination: { lat: 12.9352, lng: 77.6245 },
-            }}
+            pickupCoords={originCoords}
+            pickupName={formData.origin || "Origin"}
+            destinationCoords={destinationCoords}
+            destinationName={formData.destination || "Destination"}
+            routeGeometry={routeGeometry}
+            distanceKm={distanceKm}
+            durationMins={durationMins}
           />
         </div>
       </div>

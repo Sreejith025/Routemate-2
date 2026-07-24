@@ -6,6 +6,7 @@ import {
   bookRide,
   triggerDynamicSwitch,
   respondToSwitch,
+  leaveSharedRide,
   getUserRideHistory,
 } from "../controllers/rideController.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
@@ -22,5 +23,6 @@ router.post("/", createRide);
 router.post("/:id/book", bookRide);
 router.post("/:id/trigger-switch", triggerDynamicSwitch);
 router.post("/:id/respond-switch", respondToSwitch);
+router.post("/:id/leave-shared-ride", leaveSharedRide);
 
 export default router;

@@ -4,7 +4,7 @@ import { useAuthContext } from "../context/AuthContext";
 import { Loader2 } from "lucide-react";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isSignedIn, loading, role } = useAuthContext();
+  const { isSignedIn, loading, role, isAdmin } = useAuthContext();
   const location = useLocation();
 
   if (loading) {
@@ -20,11 +20,14 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/sign-in" state={{ from: location }} replace />;
   }
 
-  // Role restriction check
+  // Admin users are granted full application access to all pages & dashboards
+  if (isAdmin || role === "Admin") {
+    return children;
+  }
+
+  // Role restriction check for non-admin users
   if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    // Redirect to user's permitted dashboard based on their role
     if (role === "Driver") return <Navigate to="/driver" replace />;
-    if (role === "Admin") return <Navigate to="/admin" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 

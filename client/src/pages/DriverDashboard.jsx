@@ -5,22 +5,22 @@ import {
   Car,
   PlusCircle,
   Users,
-  DollarSign,
   ShieldCheck,
   ToggleLeft,
   ToggleRight,
-  MapPin,
   Clock,
-  Zap,
   CheckCircle2,
-  XCircle,
-  TrendingUp,
-  AlertCircle,
   Navigation,
   RefreshCw,
+  Gauge,
+  MapPin,
+  Play,
+  Square,
+  Radio,
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
 import { getUserRideHistoryApi } from "../services/api";
+import { useLiveLocation } from "../hooks/useLiveLocation";
 import toast from "react-hot-toast";
 
 const DriverDashboard = () => {
@@ -28,6 +28,7 @@ const DriverDashboard = () => {
   const [isAvailable, setIsAvailable] = useState(true);
   const [driverRides, setDriverRides] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRideId, setSelectedRideId] = useState(null);
 
   useEffect(() => {
     fetchDriverRides();
@@ -39,6 +40,9 @@ const DriverDashboard = () => {
       const res = await getUserRideHistoryApi();
       if (res.data?.history) {
         setDriverRides(res.data.history);
+        if (res.data.history.length > 0 && !selectedRideId) {
+          setSelectedRideId(res.data.history[0]._id);
+        }
       }
     } catch (err) {
       console.error("Fetch driver rides error:", err);
@@ -50,6 +54,31 @@ const DriverDashboard = () => {
   const activeRides = driverRides.filter((r) => r.status === "active" || r.status === "scheduled");
   const completedRides = driverRides.filter((r) => r.status === "completed");
 
+  const activeSelectedRide = driverRides.find((r) => r._id === selectedRideId) || driverRides[0];
+
+  // Driver Live GPS Hook Integration
+  const userId = dbUser?.clerkId || dbUser?._id;
+  const {
+    currentLocation,
+    driverLocation,
+    passengerLocations,
+    routeGeometry,
+    distanceRemaining,
+    totalDistanceTraveled,
+    etaMinutes,
+    gpsStatus,
+    rideStatus,
+    socketConnected,
+    startRide,
+    endRide,
+  } = useLiveLocation({
+    rideId: activeSelectedRide?._id,
+    userId: userId,
+    role: "Driver",
+    isTrackingActive: isAvailable && activeSelectedRide?.status !== "completed",
+    destinationCoords: activeSelectedRide?.destinationCoords,
+  });
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Driver Welcome Banner */}
@@ -57,7 +86,11 @@ const DriverDashboard = () => {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center space-x-4">
             <img
-              src={clerkUser?.imageUrl || dbUser?.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"}
+              src={
+                clerkUser?.imageUrl ||
+                dbUser?.profileImage ||
+                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"
+              }
               alt="Profile"
               className="w-16 h-16 rounded-2xl object-cover ring-2 ring-emerald-500/50 shadow-lg"
             />
@@ -71,7 +104,7 @@ const DriverDashboard = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Driver Email: {dbUser?.email || clerkUser?.primaryEmailAddress?.emailAddress} • MongoDB Synced
+                Driver Email: {dbUser?.email || clerkUser?.primaryEmailAddress?.emailAddress} • MongoDB & Socket Synced
               </p>
             </div>
           </div>
@@ -81,7 +114,7 @@ const DriverDashboard = () => {
             <button
               onClick={() => {
                 setIsAvailable(!isAvailable);
-                toast(isAvailable ? "Status set to Offline." : "Status set to Online & Ready for Rides!");
+                toast(isAvailable ? "GPS Telemetry Paused." : "GPS Tracking ONLINE & Ready!");
               }}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all ${
                 isAvailable
@@ -90,7 +123,7 @@ const DriverDashboard = () => {
               }`}
             >
               {isAvailable ? <ToggleRight className="w-5 h-5 text-emerald-400" /> : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-              <span>{isAvailable ? "Status: ONLINE (Accepting Rides)" : "Status: OFFLINE"}</span>
+              <span>{isAvailable ? "GPS Status: ACTIVE" : "GPS Status: OFFLINE"}</span>
             </button>
 
             <Link
@@ -135,15 +168,97 @@ const DriverDashboard = () => {
 
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Account Verification</span>
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">GPS & Socket Telemetry</span>
+            <Radio className="w-5 h-5 text-emerald-400 animate-pulse" />
           </div>
-          <p className="text-lg font-bold text-emerald-400 flex items-center gap-1.5 pt-1">
-            Verified Host
+          <p className="text-sm font-bold text-emerald-400 pt-1">
+            {gpsStatus}
           </p>
-          <p className="text-xs text-slate-500">Clerk & MongoDB Synced</p>
+          <p className="text-xs text-slate-500">{socketConnected ? "Socket.IO Online" : "Socket Reconnecting"}</p>
         </div>
       </div>
+
+      {/* Driver Real-Time Telemetry Bar (Req 8) */}
+      {activeSelectedRide && (
+        <div className="p-6 rounded-3xl glass-card border border-emerald-500/30 bg-slate-950/80 shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800">
+            <div className="flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <Navigation className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Active Ride Live Control</h4>
+                <p className="text-xs text-slate-400">
+                  {activeSelectedRide.origin} ➔ {activeSelectedRide.destination}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {activeSelectedRide.status !== "active" && (
+                <button
+                  onClick={() => {
+                    startRide();
+                    toast.success("Ride Started! Broadcasting driver location.");
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+                >
+                  <Play className="w-4 h-4 fill-white" /> Start Ride
+                </button>
+              )}
+              {activeSelectedRide.status !== "completed" && (
+                <button
+                  onClick={() => {
+                    endRide();
+                    toast.success("Ride Ended!");
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 flex items-center gap-1.5 shadow-lg shadow-red-600/20"
+                >
+                  <Square className="w-4 h-4 fill-white" /> End Ride
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-xs">
+            <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-400 block font-semibold">Current Speed</span>
+              <span className="text-lg font-black text-emerald-400 font-mono flex items-center gap-1">
+                <Gauge className="w-4 h-4" />
+                {Math.round((currentLocation?.speed || 0) * 3.6)} km/h
+              </span>
+            </div>
+
+            <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-400 block font-semibold">GPS Telemetry Status</span>
+              <span className="text-xs font-bold text-emerald-300 truncate block">
+                {gpsStatus}
+              </span>
+            </div>
+
+            <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-400 block font-semibold">Distance Remaining</span>
+              <span className="text-lg font-black text-indigo-400 font-mono">
+                {distanceRemaining} km
+              </span>
+            </div>
+
+            <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-400 block font-semibold">Distance Traveled</span>
+              <span className="text-lg font-black text-purple-400 font-mono">
+                {totalDistanceTraveled} km
+              </span>
+            </div>
+
+            <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-400 block font-semibold">Estimated Arrival (ETA)</span>
+              <span className="text-lg font-black text-amber-400 font-mono">
+                ~{etaMinutes} mins
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Active Driver Routes & Navigation Map */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -180,7 +295,12 @@ const DriverDashboard = () => {
               driverRides.map((ride) => (
                 <div
                   key={ride._id}
-                  className="p-5 rounded-2xl glass-card border border-slate-800 space-y-3"
+                  onClick={() => setSelectedRideId(ride._id)}
+                  className={`p-5 rounded-2xl glass-card border transition-all cursor-pointer space-y-3 ${
+                    activeSelectedRide?._id === ride._id
+                      ? "border-emerald-500 bg-emerald-950/20 shadow-lg shadow-emerald-500/10"
+                      : "border-slate-800 hover:border-slate-700"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
@@ -190,7 +310,7 @@ const DriverDashboard = () => {
                   </div>
 
                   <div className="text-xs space-y-1 text-slate-300 font-medium">
-                    <p>Origin: <strong>{ride.origin}</strong></p>
+                    <p>Pickup: <strong>{ride.origin}</strong></p>
                     <p>Destination: <strong>{ride.destination}</strong></p>
                     <p className="text-slate-400 text-[11px]">
                       Vehicle: {ride.vehicleDetails?.make} {ride.vehicleDetails?.model} ({ride.vehicleDetails?.plate})
@@ -198,8 +318,8 @@ const DriverDashboard = () => {
                   </div>
 
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                    <span>Seats Available: {ride.seatsAvailable}</span>
-                    <span>Passengers: {ride.passengers?.length || 0}</span>
+                    <span>Seats: {ride.seatsAvailable}</span>
+                    <span>Passengers ({ride.passengers?.length || 0})</span>
                   </div>
                 </div>
               ))
@@ -212,22 +332,32 @@ const DriverDashboard = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Navigation className="w-5 h-5 text-emerald-400" />
-              <span>Live Navigation & Route Telemetry</span>
+              <span>Live Driver & Passenger Map</span>
             </h3>
-            <span className="text-xs text-emerald-400 font-mono font-bold">DATABASE TELEMETRY</span>
+            <span className="text-xs text-emerald-400 font-mono font-bold uppercase">
+              {socketConnected ? "● SOCKET LIVE" : "○ DISCONNECTED"}
+            </span>
           </div>
 
           <LiveMap
             height="480px"
-            center={{ lat: 12.9716, lng: 77.5946 }}
-            zoom={13}
-            drivers={driverRides.map((r) => ({
-              name: r.driverName,
-              vehicle: `${r.vehicleDetails?.make} ${r.vehicleDetails?.model}`,
-              lat: r.originCoords?.lat,
-              lng: r.originCoords?.lng,
-            }))}
-            switchAlert={true}
+            center={
+              activeSelectedRide?.originCoords
+                ? { lat: activeSelectedRide.originCoords.lat, lng: activeSelectedRide.originCoords.lng }
+                : { lat: 12.9716, lng: 77.5946 }
+            }
+            zoom={14}
+            driverLocation={driverLocation || (currentLocation ? { ...currentLocation, latitude: currentLocation.latitude, longitude: currentLocation.longitude } : null)}
+            driverName={dbUser?.fullName || clerkUser?.firstName || "Driver"}
+            vehicleDetails={activeSelectedRide?.vehicleDetails}
+            passengerLocations={passengerLocations}
+            passengers={activeSelectedRide?.passengers || []}
+            pickupCoords={activeSelectedRide?.originCoords}
+            pickupName={activeSelectedRide?.origin}
+            destinationCoords={activeSelectedRide?.destinationCoords}
+            destinationName={activeSelectedRide?.destination}
+            routeGeometry={routeGeometry}
+            isRideActive={isAvailable && activeSelectedRide?.status !== "completed"}
           />
         </div>
       </div>
