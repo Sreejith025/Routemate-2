@@ -21,6 +21,8 @@ import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
 import RideControlsSection from "../components/RideControlsSection";
 import { getAvailableRidesApi, getUserRideHistoryApi } from "../services/api";
+import socket from "../services/socket";
+import toast from "react-hot-toast";
 
 const Dashboard = () => {
   const { dbUser, clerkUser, role } = useAuthContext();
@@ -30,6 +32,25 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Listen for driver manual booking acceptance/rejection
+    const handleBookingAccepted = (data) => {
+      toast.success(data.message || "🎉 Driver accepted your booking! Seat confirmed.", { duration: 5000 });
+      fetchDashboardData();
+    };
+
+    const handleBookingRejected = (data) => {
+      toast.error(data.message || "Driver declined your booking request.", { duration: 5000 });
+      fetchDashboardData();
+    };
+
+    socket.on("bookingAccepted", handleBookingAccepted);
+    socket.on("bookingRejected", handleBookingRejected);
+
+    return () => {
+      socket.off("bookingAccepted", handleBookingAccepted);
+      socket.off("bookingRejected", handleBookingRejected);
+    };
   }, []);
 
   const fetchDashboardData = async () => {
@@ -53,7 +74,24 @@ const Dashboard = () => {
     }
   };
 
-  const activeRides = userHistory.filter((r) => r.status === "active" || r.status === "scheduled");
+  const currentUserId = clerkUser?.id || dbUser?.clerkId;
+
+  // Active confirmed rides
+  const activeRides = userHistory.filter(
+    (r) =>
+      (r.status === "active" || r.status === "scheduled") &&
+      r.passengers?.some((p) => p.userId === currentUserId || String(p.userId) === String(currentUserId))
+  );
+
+  // Pending booking requests waiting for driver manual confirmation
+  const pendingBookingRides = userHistory.filter(
+    (r) =>
+      r.bookingRequests?.some(
+        (br) => (br.userId === currentUserId || String(br.userId) === String(currentUserId)) && br.status === "pending"
+      ) &&
+      !r.passengers?.some((p) => p.userId === currentUserId || String(p.userId) === String(currentUserId))
+  );
+
   const completedRides = userHistory.filter((r) => r.status === "completed");
   const activeSwitchRide = userHistory.find((r) => r.dynamicSwitchSuggested || r.switchDetails?.status === "pending");
 
@@ -126,13 +164,54 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Active Shared Ride Controls (PART 3) */}
+      {/* Pending Driver Confirmation Banner */}
+      {pendingBookingRides.length > 0 && (
+        <div className="p-5 rounded-3xl glass-card border border-amber-500/40 bg-amber-950/20 text-amber-300 space-y-3 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                <Clock className="w-5 h-5 animate-spin" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-200 uppercase tracking-wider">Booking Status: Pending Driver Approval</h4>
+                <p className="text-sm font-extrabold text-white mt-0.5">
+                  Request sent to {pendingBookingRides[0].driverName} ({pendingBookingRides[0].origin} ➔ {pendingBookingRides[0].destination})
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-500/30">
+              WAITING FOR DRIVER CONFIRMATION
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Active Shared Ride Controls & Live Tracking Link */}
       {activeRides.length > 0 && (
-        <RideControlsSection
-          ride={activeRides[0]}
-          passengerId={clerkUser?.id || dbUser?.clerkId}
-          onRideUpdated={fetchDashboardData}
-        />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-2xl glass-card border border-emerald-500/30 bg-emerald-950/20">
+            <div className="flex items-center space-x-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              <div>
+                <h4 className="text-sm font-bold text-white">Confirmed Active Ride: {activeRides[0].origin} ➔ {activeRides[0].destination}</h4>
+                <p className="text-xs text-slate-400">Driver: {activeRides[0].driverName} • Vehicle: {activeRides[0].vehicleDetails?.make} ({activeRides[0].vehicleDetails?.plate})</p>
+              </div>
+            </div>
+            <Link
+              to={`/ride/${activeRides[0]._id}`}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-600/30 flex items-center space-x-2 transition-all hover:scale-105"
+            >
+              <Car className="w-4 h-4" />
+              <span>Track Ride Live 🛰️</span>
+            </Link>
+          </div>
+
+          <RideControlsSection
+            ride={activeRides[0]}
+            passengerId={clerkUser?.id || dbUser?.clerkId}
+            onRideUpdated={fetchDashboardData}
+          />
+        </div>
       )}
 
       {/* Metrics Row */}

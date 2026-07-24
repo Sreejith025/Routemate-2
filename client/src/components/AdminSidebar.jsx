@@ -13,6 +13,7 @@ import {
   Settings,
   Sliders,
   Compass,
+  Cpu,
 } from "lucide-react";
 
 const AdminSidebar = ({ activeTab, onTabChange }) => {
@@ -33,6 +34,8 @@ const AdminSidebar = ({ activeTab, onTabChange }) => {
   // Admin Internal Tabs (for Admin Dashboard)
   const adminTabs = [
     { id: "overview", name: "System Overview", icon: LayoutDashboard },
+    { id: "optimization", name: "AI Optimization Engine", icon: Cpu },
+    { id: "saferide", name: "SafeRide AI Center", icon: ShieldAlert },
     { id: "rides", name: "Ride Management", icon: Compass },
     { id: "monitoring", name: "Ride Monitoring", icon: Activity },
     { id: "users", name: "User Management", icon: Users },

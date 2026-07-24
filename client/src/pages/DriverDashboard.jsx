@@ -19,8 +19,9 @@ import {
   Radio,
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
-import { getUserRideHistoryApi } from "../services/api";
+import { getUserRideHistoryApi, confirmBookingApi } from "../services/api";
 import { useLiveLocation } from "../hooks/useLiveLocation";
+import socket from "../services/socket";
 import toast from "react-hot-toast";
 
 const DriverDashboard = () => {
@@ -29,10 +30,59 @@ const DriverDashboard = () => {
   const [driverRides, setDriverRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRideId, setSelectedRideId] = useState(null);
+  const [driverAlert, setDriverAlert] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchDriverRides();
   }, []);
+
+  // Listen for real-time driver notifications from SafeRide AI & Booking Requests
+  useEffect(() => {
+    if (!selectedRideId) return;
+    socket.emit("joinRide", { rideId: selectedRideId });
+
+    const handleDriverNotification = (data) => {
+      setDriverAlert(data);
+      toast(data.message || "Driver Alert Received", { icon: "🛡️" });
+      fetchDriverRides();
+    };
+
+    const handleConvertedToPrivate = (data) => {
+      toast.success(data.message || "Ride converted to Private Ride");
+      fetchDriverRides();
+    };
+
+    const handleBookingRequested = (data) => {
+      toast("🙋 New Booking Request Received!", { icon: "🚗" });
+      fetchDriverRides();
+    };
+
+    socket.on("driverNotification", handleDriverNotification);
+    socket.on("rideConvertedToPrivate", handleConvertedToPrivate);
+    socket.on("bookingRequested", handleBookingRequested);
+
+    return () => {
+      socket.off("driverNotification", handleDriverNotification);
+      socket.off("rideConvertedToPrivate", handleConvertedToPrivate);
+      socket.off("bookingRequested", handleBookingRequested);
+    };
+  }, [selectedRideId]);
+
+  const handleBookingAction = async (rideId, requestId, action) => {
+    try {
+      setActionLoading(true);
+      const res = await confirmBookingApi(rideId, { requestId, action });
+      if (res.data?.success) {
+        toast.success(res.data.message);
+        fetchDriverRides();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to process booking request");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const fetchDriverRides = async () => {
     try {
@@ -136,6 +186,27 @@ const DriverDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Driver Live Alert Banner from SafeRide AI (Req FEATURE 5) */}
+      {driverAlert && (
+        <div className="p-5 rounded-3xl glass-card border border-amber-500/40 bg-amber-950/20 text-amber-300 space-y-1 animate-pulse flex items-start justify-between">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 mt-0.5">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-amber-200 uppercase tracking-wider">SafeRide AI Notification</h4>
+              <p className="text-sm font-extrabold text-white mt-0.5">{driverAlert.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDriverAlert(null)}
+            className="text-xs text-amber-400 hover:text-white px-2 py-1 bg-amber-500/10 rounded-lg"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Driver Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
@@ -318,9 +389,65 @@ const DriverDashboard = () => {
                   </div>
 
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                    <span>Seats: {ride.seatsAvailable}</span>
+                    <span>Seats Available: {ride.seatsAvailable}</span>
                     <span>Passengers ({ride.passengers?.length || 0})</span>
                   </div>
+
+                  {/* Manual Driver Confirmation - Pending Requests Section */}
+                  {ride.bookingRequests?.filter((br) => br.status === "pending").length > 0 && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5 text-indigo-400" /> Pending Booking Requests ({ride.bookingRequests.filter((br) => br.status === "pending").length})
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                          ACTION REQUIRED
+                        </span>
+                      </div>
+
+                      {ride.bookingRequests
+                        .filter((br) => br.status === "pending")
+                        .map((req, reqIdx) => (
+                          <div
+                            key={req._id || reqIdx}
+                            className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs space-y-2"
+                          >
+                            <div className="flex items-center justify-between text-white font-bold">
+                              <span>🙋 {req.name}</span>
+                              <span className="text-emerald-400 font-mono text-[11px]">{req.seatsBooked} seat(s)</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              Pickup: <span className="text-slate-200">{req.pickup}</span> ➔ Dropoff: <span className="text-slate-200">{req.dropoff}</span>
+                            </p>
+
+                            <div className="flex items-center space-x-2 pt-1">
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleBookingAction(ride._id, req._id || req.userId, "accept");
+                                }}
+                                className="flex-1 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-colors text-center"
+                              >
+                                Accept Booking
+                              </button>
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleBookingAction(ride._id, req._id || req.userId, "reject");
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 transition-colors text-center"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               ))
             )}

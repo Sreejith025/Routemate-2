@@ -16,7 +16,10 @@ import {
 import { getRideByIdApi } from "../services/api";
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
+import SafeRideButton from "../components/SafeRideButton";
 import { useLiveLocation } from "../hooks/useLiveLocation";
+
+import socket from "../services/socket";
 
 const RideDetails = () => {
   const { id } = useParams();
@@ -30,6 +33,19 @@ const RideDetails = () => {
   useEffect(() => {
     if (id) {
       fetchRide();
+
+      socket.emit("joinRide", { rideId: id });
+
+      const handleRideUpdated = () => fetchRide();
+      const handleBookingAccepted = () => fetchRide();
+
+      socket.on("rideUpdated", handleRideUpdated);
+      socket.on("bookingAccepted", handleBookingAccepted);
+
+      return () => {
+        socket.off("rideUpdated", handleRideUpdated);
+        socket.off("bookingAccepted", handleBookingAccepted);
+      };
     }
   }, [id]);
 
@@ -259,6 +275,9 @@ const RideDetails = () => {
           />
         </div>
       </div>
+
+      {/* Floating SafeRide AI Safety Button */}
+      <SafeRideButton ride={ride} passengerId={userId} onRideUpdated={fetchRide} />
     </div>
   );
 };

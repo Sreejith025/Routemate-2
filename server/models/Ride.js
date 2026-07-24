@@ -26,6 +26,22 @@ const rideSchema = new mongoose.Schema(
         seatsBooked: { type: Number, default: 1 },
         switchedTaxi: { type: Boolean, default: false },
         originalDriverId: { type: String },
+        status: { type: String, enum: ["pending", "accepted", "rejected"], default: "accepted" },
+      },
+    ],
+    bookingRequests: [
+      {
+        userId: { type: String, required: true },
+        name: { type: String, required: true },
+        pickup: { type: String, required: true },
+        dropoff: { type: String, required: true },
+        seatsBooked: { type: Number, default: 1 },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "rejected"],
+          default: "pending",
+        },
+        requestedAt: { type: Date, default: Date.now },
       },
     ],
     origin: {
@@ -63,6 +79,36 @@ const rideSchema = new mongoose.Schema(
       enum: ["scheduled", "active", "completed", "cancelled"],
       default: "scheduled",
     },
+    sharingEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    rideType: {
+      type: String,
+      enum: ["shared", "private"],
+      default: "shared",
+    },
+    lockedForNewPassengers: {
+      type: Boolean,
+      default: false,
+    },
+    trafficStatus: {
+      type: String,
+      enum: ["Normal", "TrafficAffected", "Congested"],
+      default: "Normal",
+    },
+    trafficDelayMinutes: {
+      type: Number,
+      default: 0,
+    },
+    optimizationHistory: [
+      {
+        score: Number,
+        fairnessScore: Number,
+        targetRideId: String,
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
     dynamicSwitchSuggested: {
       type: Boolean,
       default: false,

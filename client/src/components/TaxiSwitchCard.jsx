@@ -11,6 +11,8 @@ const TaxiSwitchCard = ({
   driverBName = "Marcus Vance",
   delayReason = "Heavy multi-vehicle crash on Expressway (+18m delay)",
   timeSaved = 14,
+  optimizationScore = 88,
+  fairnessScore = 94,
   onAccept,
   onDecline,
 }) => {
@@ -100,9 +102,11 @@ const TaxiSwitchCard = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                AI Recommendation
+                AI Optimization Score: {optimizationScore}/100
               </span>
-              <span className="text-xs text-slate-400 font-mono">LIVE MATCH</span>
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
+                Fairness: {fairnessScore}%
+              </span>
             </div>
             <h3 className="text-lg font-bold text-white mt-0.5">Intelligent Taxi Switch Available</h3>
           </div>

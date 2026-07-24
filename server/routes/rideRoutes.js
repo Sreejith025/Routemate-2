@@ -4,6 +4,7 @@ import {
   getRideById,
   createRide,
   bookRide,
+  confirmBooking,
   triggerDynamicSwitch,
   respondToSwitch,
   leaveSharedRide,
@@ -21,6 +22,7 @@ router.get("/:id", getRideById);
 // Protected ride operations
 router.post("/", createRide);
 router.post("/:id/book", bookRide);
+router.post("/:id/confirm-booking", confirmBooking);
 router.post("/:id/trigger-switch", triggerDynamicSwitch);
 router.post("/:id/respond-switch", respondToSwitch);
 router.post("/:id/leave-shared-ride", leaveSharedRide);

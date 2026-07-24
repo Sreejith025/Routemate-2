@@ -210,7 +210,7 @@ export const createRide = async (req, res) => {
 };
 
 /**
- * Book / Join a ride in MongoDB (Passenger)
+ * Book / Join a ride in MongoDB (Passenger Manual Driver Confirmation Flow)
  */
 export const bookRide = async (req, res) => {
   try {
@@ -231,30 +231,165 @@ export const bookRide = async (req, res) => {
       return res.status(400).json({ success: false, message: "Not enough seats available" });
     }
 
-    ride.seatsAvailable -= seats;
-    ride.passengers.push({
+    // Check if user already has a pending or accepted booking request
+    const existingReq = ride.bookingRequests?.find(
+      (r) => (r.userId === userId || String(r.userId) === String(userId)) && r.status === "pending"
+    );
+
+    if (existingReq) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have a pending booking request for this ride. Please wait for driver confirmation.",
+      });
+    }
+
+    const newRequest = {
       userId,
       name: passengerName,
       pickup: pickup || ride.origin,
       dropoff: dropoff || ride.destination,
-      seatsBooked: seats,
-    });
+      seatsBooked: Number(seats) || 1,
+      status: "pending",
+      requestedAt: new Date(),
+    };
 
-    if (ride.status === "scheduled") {
-      ride.status = "active";
+    if (!ride.bookingRequests) {
+      ride.bookingRequests = [];
     }
-
+    ride.bookingRequests.push(newRequest);
     await ride.save();
+
+    // Broadcast Socket event to Driver
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`ride_${ride._id}`).emit("driverNotification", {
+        type: "BOOKING_REQUEST",
+        message: `New booking request from ${passengerName}. Driver confirmation required.`,
+        rideId: ride._id.toString(),
+        request: newRequest,
+        timestamp: new Date().toISOString(),
+      });
+
+      io.to(`ride_${ride._id}`).emit("bookingRequested", {
+        rideId: ride._id.toString(),
+        request: newRequest,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Ride booked successfully in database! Seat confirmed.",
+      message: "Ride booking request submitted! Waiting for driver confirmation.",
+      status: "pending",
+      bookingRequest: newRequest,
       ride,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Error booking ride in database",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Confirm or Reject a Ride Booking Request (Driver Manual Action)
+ */
+export const confirmBooking = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { requestId, action } = req.body; // action: "accept" or "reject"
+
+    const ride = await Ride.findById(id);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found in database" });
+    }
+
+    const reqIndex = ride.bookingRequests?.findIndex(
+      (r) => r._id?.toString() === requestId || String(r._id) === String(requestId) || r.userId === requestId
+    );
+
+    if (reqIndex === -1 || reqIndex === undefined) {
+      return res.status(404).json({ success: false, message: "Booking request not found" });
+    }
+
+    const targetReq = ride.bookingRequests[reqIndex];
+
+    if (action === "accept") {
+      if (ride.seatsAvailable < targetReq.seatsBooked) {
+        return res.status(400).json({ success: false, message: "Not enough seats available to accept booking" });
+      }
+
+      targetReq.status = "accepted";
+      ride.seatsAvailable = Math.max(0, ride.seatsAvailable - targetReq.seatsBooked);
+
+      // Add to confirmed passengers list if not already there
+      const isAlreadyPassenger = ride.passengers?.some(
+        (p) => p.userId === targetReq.userId || String(p.userId) === String(targetReq.userId)
+      );
+
+      if (!isAlreadyPassenger) {
+        ride.passengers.push({
+          userId: targetReq.userId,
+          name: targetReq.name,
+          pickup: targetReq.pickup,
+          dropoff: targetReq.dropoff,
+          seatsBooked: targetReq.seatsBooked,
+          status: "accepted",
+        });
+      }
+
+      if (ride.status === "scheduled") {
+        ride.status = "active";
+      }
+
+      await ride.save();
+
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`ride_${ride._id}`).emit("bookingAccepted", {
+          rideId: ride._id.toString(),
+          passengerId: targetReq.userId,
+          passengerName: targetReq.name,
+          message: `Driver accepted booking for ${targetReq.name}! Seat confirmed.`,
+          timestamp: new Date().toISOString(),
+        });
+        io.to(`ride_${ride._id}`).emit("rideUpdated", { rideId: ride._id.toString(), ride });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Booking request accepted for ${targetReq.name}! Seat confirmed.`,
+        ride,
+      });
+    } else {
+      // Reject request
+      targetReq.status = "rejected";
+      await ride.save();
+
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`ride_${ride._id}`).emit("bookingRejected", {
+          rideId: ride._id.toString(),
+          passengerId: targetReq.userId,
+          passengerName: targetReq.name,
+          message: `Driver declined booking request.`,
+          timestamp: new Date().toISOString(),
+        });
+        io.to(`ride_${ride._id}`).emit("rideUpdated", { rideId: ride._id.toString(), ride });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Booking request declined for ${targetReq.name}.`,
+        ride,
+      });
+    }
+  } catch (error) {
+    console.error("Confirm Booking Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to confirm booking request",
       error: error.message,
     });
   }
@@ -337,7 +472,11 @@ export const getUserRideHistory = async (req, res) => {
     let query = {};
     if (userId) {
       query = {
-        $or: [{ driverId: userId }, { "passengers.userId": userId }],
+        $or: [
+          { driverId: userId },
+          { "passengers.userId": userId },
+          { "bookingRequests.userId": userId },
+        ],
       };
     }
 

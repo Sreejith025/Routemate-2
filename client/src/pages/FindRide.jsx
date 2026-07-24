@@ -220,14 +220,14 @@ const FindRide = () => {
         `${clerkUser?.firstName || ""} ${clerkUser?.lastName || ""}`.trim() ||
         "Passenger";
 
-      await bookRideApi(selectedRide._id, {
+      const res = await bookRideApi(selectedRide._id, {
         seats: bookingSeats,
         passengerName,
         pickup: pickupInput || selectedRide.origin,
         dropoff: destInput || selectedRide.destination,
       });
 
-      toast.success("Seat booked successfully! View details on your Passenger Dashboard.");
+      toast.success(res.data?.message || "Booking request sent to driver! Waiting for manual driver confirmation.");
       setSelectedRide(null);
       fetchRides();
     } catch (err) {
@@ -460,12 +460,37 @@ const FindRide = () => {
                       <span className="text-[11px] text-slate-400 flex items-center gap-1">
                         <Compass className="w-3.5 h-3.5 text-emerald-400" /> Live GPS Coordinates: {ride.originCoords?.lat?.toFixed(3)}, {ride.originCoords?.lng?.toFixed(3)}
                       </span>
-                      <button
-                        onClick={() => setSelectedRide(ride)}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all hover:scale-105"
-                      >
-                        Book Seat
-                      </button>
+                      {(() => {
+                        const curId = clerkUser?.id || dbUser?.clerkId;
+                        const isConfirmed = ride.passengers?.some((p) => p.userId === curId || String(p.userId) === String(curId));
+                        const isPending = ride.bookingRequests?.some((br) => (br.userId === curId || String(br.userId) === String(curId)) && br.status === "pending");
+
+                        if (isConfirmed) {
+                          return (
+                            <Link
+                              to={`/ride/${ride._id}`}
+                              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition-all hover:scale-105"
+                            >
+                              Track Ride Live 🛰️
+                            </Link>
+                          );
+                        }
+                        if (isPending) {
+                          return (
+                            <span className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 animate-pulse">
+                              Pending Driver Approval
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            onClick={() => setSelectedRide(ride)}
+                            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all hover:scale-105"
+                          >
+                            Book Seat
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))
