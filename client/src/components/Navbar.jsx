@@ -52,6 +52,18 @@ const Navbar = () => {
     { name: "Profile", path: "/profile", icon: User, show: isSignedIn },
   ];
 
+  // Driver Nav Links
+  const driverLinks = [
+    { name: "Home", path: "/", icon: Home, show: true },
+    { name: "Driver Hub", path: "/driver", icon: Car, show: true },
+    { name: "Offer Ride", path: "/offer-ride", icon: PlusCircle, show: true },
+    { name: "Find Ride", path: "/find-ride", icon: Search, show: true },
+    { name: "Emergency SOS", path: "/emergency", icon: Siren, show: true, highlightEmergency: true },
+    { name: "Taxi Switching", path: "/taxi-switching", icon: Zap, show: true, highlight: true },
+    { name: "Features", path: "/features", icon: Layers, show: true },
+    { name: "Profile", path: "/profile", icon: User, show: isSignedIn },
+  ];
+
   // Admin Nav Links (Full Access to All Dashboards & Features)
   const adminLinks = [
     { name: "Emergency Control", path: "/admin/emergency", icon: Siren, show: true, highlightEmergency: true },
@@ -62,9 +74,15 @@ const Navbar = () => {
     { name: "Offer Ride", path: "/offer-ride", icon: PlusCircle, show: true },
     { name: "Taxi Switching", path: "/taxi-switching", icon: Zap, show: true, highlight: true },
     { name: "Features", path: "/features", icon: Layers, show: true },
+    { name: "Profile", path: "/profile", icon: User, show: isSignedIn },
   ];
 
-  const navLinks = isAdmin || role === "Admin" ? adminLinks : passengerLinks;
+  const navLinks =
+    role === "Admin"
+      ? adminLinks
+      : role === "Driver"
+      ? driverLinks
+      : passengerLinks;
 
   const handleSignOut = async () => {
     await signOut();

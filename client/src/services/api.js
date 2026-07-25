@@ -36,9 +36,11 @@ export const getAllUsersApi = () => api.get("/users");
 
 // Ride APIs
 export const getAvailableRidesApi = (params) => api.get("/rides", { params });
+export const getEligibleSharedRidesApi = (params) => api.get("/rides/eligible-shared", { params });
 export const getRideByIdApi = (id) => api.get(`/rides/${id}`);
 export const createRideApi = (rideData) => api.post("/rides", rideData);
 export const bookRideApi = (id, bookingData) => api.post(`/rides/${id}/book`, bookingData);
+export const joinSecondPassengerApi = (id, data) => api.post(`/rides/${id}/join-second`, data);
 export const confirmBookingApi = (id, actionData) => api.post(`/rides/${id}/confirm-booking`, actionData);
 export const updateRideStageApi = (id, stageData) => api.post(`/rides/${id}/update-stage`, stageData);
 export const sendRideChatMessageApi = (id, chatData) => api.post(`/rides/${id}/chat`, chatData);

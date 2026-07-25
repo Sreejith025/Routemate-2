@@ -15,7 +15,7 @@ export const AuthProvider = ({ children }) => {
 
   const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || "";
   const isAdmin = Boolean(dbUser?.isAdmin || isAdminEmail(userEmail));
-  const role = isAdmin ? "Admin" : (dbUser?.role || "Passenger");
+  const role = dbUser?.role || (isAdmin ? "Admin" : "Passenger");
 
   // Sync user with backend MongoDB database
   const syncUserWithBackend = useCallback(async () => {

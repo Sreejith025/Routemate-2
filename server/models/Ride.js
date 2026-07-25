@@ -23,12 +23,46 @@ const rideSchema = new mongoose.Schema(
         name: { type: String, required: true },
         pickup: { type: String, required: true },
         dropoff: { type: String, required: true },
+        pickupCoords: {
+          lat: { type: Number, default: 12.9716 },
+          lng: { type: Number, default: 77.5946 },
+        },
+        dropoffCoords: {
+          lat: { type: Number, default: 12.9352 },
+          lng: { type: Number, default: 77.6245 },
+        },
         seatsBooked: { type: Number, default: 1 },
+        distanceKm: { type: Number, default: 10 },
+        fare: { type: Number, default: 150 },
+        originalPrivateFare: { type: Number, default: 220 },
+        savings: { type: Number, default: 70 },
         switchedTaxi: { type: Boolean, default: false },
         originalDriverId: { type: String },
         status: { type: String, enum: ["pending", "accepted", "rejected"], default: "accepted" },
       },
     ],
+    pickupSequence: [
+      {
+        passengerId: String,
+        name: String,
+        pickupName: String,
+        lat: Number,
+        lng: Number,
+      },
+    ],
+    dropSequence: [
+      {
+        passengerId: String,
+        name: String,
+        dropoffName: String,
+        lat: Number,
+        lng: Number,
+      },
+    ],
+    sharedFareTotal: {
+      type: Number,
+      default: 300,
+    },
     bookingRequests: [
       {
         userId: { type: String, required: true },
@@ -105,9 +139,45 @@ const rideSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    pickupPin: {
+      type: String,
+      default: "4892",
+    },
+    pickupPinAttempts: {
+      type: Number,
+      default: 0,
+    },
+    pickupPinVerified: {
+      type: Boolean,
+      default: false,
+    },
     dropPin: {
       type: String,
       default: "7182",
+    },
+    dropPinAttempts: {
+      type: Number,
+      default: 0,
+    },
+    dropPinVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emergencyPin: {
+      type: String,
+      default: null,
+    },
+    emergencyPinAttempts: {
+      type: Number,
+      default: 0,
+    },
+    emergencyPinVerified: {
+      type: Boolean,
+      default: false,
+    },
+    clientId: {
+      type: String,
+      default: "default_org",
     },
     waitingTimeMins: {
       type: Number,

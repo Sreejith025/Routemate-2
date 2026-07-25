@@ -57,6 +57,22 @@ const userSchema = new mongoose.Schema(
       ],
       default: "noPreference",
     },
+    isFrozen: {
+      type: Boolean,
+      default: false,
+    },
+    freezeReason: {
+      type: String,
+      default: null,
+    },
+    clientId: {
+      type: String,
+      default: "default_org",
+    },
+    walletBalance: {
+      type: Number,
+      default: 500,
+    },
   },
   {
     timestamps: true,

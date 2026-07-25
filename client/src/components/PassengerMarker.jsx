@@ -22,7 +22,7 @@ const createPassengerIcon = (name = "Passenger") => {
           height: 34px;
           border-radius: 50%;
           background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-          border: 2px solid white;
+          border: 2.5px solid white;
           box-shadow: 0 4px 14px rgba(0,0,0,0.5);
           display: flex;
           align-items: center;
@@ -40,15 +40,22 @@ const createPassengerIcon = (name = "Passenger") => {
 };
 
 const PassengerMarker = ({ passengerLocation, name, pickupLocation }) => {
-  if (!passengerLocation || passengerLocation.latitude === undefined || passengerLocation.longitude === undefined) {
+  if (!passengerLocation) return null;
+
+  const latitude = passengerLocation.latitude ?? passengerLocation.lat;
+  const longitude = passengerLocation.longitude ?? passengerLocation.lng;
+
+  if (latitude == null || longitude == null || isNaN(latitude) || isNaN(longitude)) {
     return null;
   }
 
-  const { latitude, longitude, accuracy } = passengerLocation;
+  const accuracy = passengerLocation.accuracy || 0;
+
+  console.log("🧍 [PassengerMarker Render]", { latitude, longitude, accuracy, name });
 
   return (
     <Marker
-      position={[latitude, longitude]}
+      position={[Number(latitude), Number(longitude)]}
       icon={createPassengerIcon(name)}
     >
       <Popup className="custom-leaflet-popup">
@@ -56,7 +63,7 @@ const PassengerMarker = ({ passengerLocation, name, pickupLocation }) => {
           <div className="font-bold text-sm text-purple-950 flex items-center justify-between gap-2">
             <span>🧍 {name || "Passenger"}</span>
             <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded">
-              Passenger Location
+              Passenger GPS
             </span>
           </div>
 

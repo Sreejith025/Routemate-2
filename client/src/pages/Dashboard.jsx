@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
 import {
   User,
+  Users,
   Search,
   Clock,
   MapPin,
@@ -20,7 +21,11 @@ import {
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
 import RideControlsSection from "../components/RideControlsSection";
-import { getAvailableRidesApi, getUserRideHistoryApi } from "../services/api";
+import {
+  getAvailableRidesApi,
+  getUserRideHistoryApi,
+  getNearbyDriversApi,
+} from "../services/api";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
 
@@ -29,6 +34,7 @@ const Dashboard = () => {
   const { dbUser, clerkUser, role } = useAuthContext();
   const [rides, setRides] = useState([]);
   const [userHistory, setUserHistory] = useState([]);
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

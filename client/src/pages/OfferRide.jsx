@@ -82,21 +82,27 @@ const OfferRide = () => {
         "Verified Driver";
 
       const res = await createRideApi({
-        driverId: clerkUser?.id || dbUser?.clerkId,
+        driverId: clerkUser?.id || dbUser?.clerkId || "driver_demo_id",
         driverName,
-        driverPhoto: clerkUser?.imageUrl || dbUser?.profileImage,
-        origin: formData.origin,
-        destination: formData.destination,
-        originCoords,
-        destinationCoords,
-        departureTime: formData.departureTime,
-        seatsAvailable: Number(formData.seatsAvailable),
-        pricePerSeat: Number(formData.pricePerSeat),
+        driverPhoto: clerkUser?.imageUrl || dbUser?.profileImage || "",
+        origin: formData.origin?.trim() || "Departure Location",
+        destination: formData.destination?.trim() || "Destination Target",
+        originCoords: {
+          lat: Number(originCoords?.lat) || 12.9716,
+          lng: Number(originCoords?.lng) || 77.5946,
+        },
+        destinationCoords: {
+          lat: Number(destinationCoords?.lat) || 12.9352,
+          lng: Number(destinationCoords?.lng) || 77.6245,
+        },
+        departureTime: formData.departureTime || "In 15 minutes",
+        seatsAvailable: Number(formData.seatsAvailable) || 3,
+        pricePerSeat: Number(formData.pricePerSeat) || 18,
         vehicleDetails: {
-          make: formData.vehicleMake,
-          model: formData.vehicleModel,
-          plate: formData.plate,
-          color: formData.color,
+          make: formData.vehicleMake || "Tesla",
+          model: formData.vehicleModel || "Model 3",
+          plate: formData.plate || "EV-9901",
+          color: formData.color || "White",
         },
       });
 
@@ -110,7 +116,7 @@ const OfferRide = () => {
       navigate("/driver");
     } catch (err) {
       console.error("Create ride error:", err);
-      toast.error(err.response?.data?.message || "Failed to publish ride");
+      toast.error(err.response?.data?.message || err.message || "Failed to publish ride");
     } finally {
       setLoading(false);
     }

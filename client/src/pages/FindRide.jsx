@@ -15,7 +15,12 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import axios from "axios";
-import { getAvailableRidesApi, bookRideApi } from "../services/api";
+import {
+  getAvailableRidesApi,
+  getEligibleSharedRidesApi,
+  bookRideApi,
+  joinSecondPassengerApi,
+} from "../services/api";
 import LiveMap from "../components/LiveMap";
 import LocationAutocompleteInput from "../components/LocationAutocompleteInput";
 import RidePreferencesCard from "../components/RidePreferencesCard";
@@ -28,6 +33,7 @@ const FindRide = () => {
   const navigate = useNavigate();
   const { clerkUser, dbUser } = useAuthContext();
   const [rides, setRides] = useState([]);
+  const [eligibleSharedRides, setEligibleSharedRides] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -128,6 +134,21 @@ const FindRide = () => {
         } else {
           setRides([]);
         }
+
+        // FEATURE 1: Detect Eligible Shared Ride (2 km pickup radius & >= 80% route similarity)
+        if (currentPLoc?.lat && currentDLoc?.lat) {
+          const eligibleRes = await getEligibleSharedRidesApi({
+            pickupLat: currentPLoc.lat,
+            pickupLng: currentPLoc.lng,
+            dropoffLat: currentDLoc.lat,
+            dropoffLng: currentDLoc.lng,
+            radius: 2.0,
+          });
+
+          if (eligibleRes.data?.eligibleRides) {
+            setEligibleSharedRides(eligibleRes.data.eligibleRides);
+          }
+        }
       } catch (err) {
         console.error("Fetch rides error:", err);
         toast.error("Failed to load available rides from database");
@@ -137,6 +158,30 @@ const FindRide = () => {
     },
     [pickupInput, destInput, pickupLocation, destLocation]
   );
+
+  const handleJoinSecondPassenger = async (rideId) => {
+    try {
+      setBookingLoading(true);
+      const res = await joinSecondPassengerApi(rideId, {
+        userId: clerkUser?.id || dbUser?.clerkId,
+        name: dbUser?.fullName || clerkUser?.firstName || "Passenger 2",
+        pickup: pickupInput || "Passenger 2 Pickup",
+        dropoff: destInput || "Passenger 2 Destination",
+        pickupCoords: pickupLocation || { lat: 12.9716, lng: 77.5946 },
+        dropoffCoords: destLocation || { lat: 12.9352, lng: 77.6245 },
+      });
+
+      if (res.data?.success) {
+        toast.success("🎉 Joined shared ride as Second Passenger! Fares re-optimized.");
+        navigate(`/active-ride/${rideId}`);
+      }
+    } catch (err) {
+      console.error("Error joining second passenger:", err);
+      toast.error(err.response?.data?.message || "Failed to join shared ride");
+    } finally {
+      setBookingLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchRides();
@@ -399,6 +444,49 @@ const FindRide = () => {
               </button>
             </form>
           </div>
+
+          {/* FEATURE 1: ELIGIBLE ACTIVE SHARED RIDE RECOMMENDATION BANNER */}
+          {eligibleSharedRides.length > 0 && (
+            <div className="bg-gradient-to-r from-emerald-950/90 via-slate-900 to-indigo-950/90 border-2 border-emerald-500/50 rounded-3xl p-5 shadow-2xl space-y-3 animate-pulse-glow">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 uppercase tracking-wider">
+                    ⚡ FEATURE 1: ELIGIBLE MATCH
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400 font-mono">
+                    {eligibleSharedRides[0].routeSimilarity}% ROUTE SIMILARITY
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  {eligibleSharedRides[0].pickupDistanceKm} km Pickup Radius
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-black text-white flex items-center gap-1.5">
+                  <span>Join Active Shared Ride with {eligibleSharedRides[0].driverName}</span>
+                </h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Taxi <strong className="text-white">{eligibleSharedRides[0].vehicleDetails?.make} ({eligibleSharedRides[0].vehicleDetails?.plate})</strong> is passing within {eligibleSharedRides[0].pickupDistanceKm} km of your pickup!
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20 text-xs">
+                <span className="text-emerald-300 font-bold">
+                  Estimated Fare Savings: <span className="font-mono text-emerald-400 font-black text-sm">~₹{eligibleSharedRides[0].estimatedFareSavings} OFF</span>
+                </span>
+
+                <button
+                  type="button"
+                  disabled={bookingLoading}
+                  onClick={() => handleJoinSecondPassenger(eligibleSharedRides[0].rideId)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/30 transition-all hover:scale-105"
+                >
+                  {bookingLoading ? "Joining Shared Ride..." : "Join Shared Commute 🚕"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Available Rides List */}
           <div className="space-y-4">

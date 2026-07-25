@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import { useAuthContext } from "../context/AuthContext";
 import {
   Car,
@@ -39,6 +40,10 @@ import {
 import LiveMap from "../components/LiveMap";
 import TaxiSwitchCard from "../components/TaxiSwitchCard";
 import SafeRideModal from "../components/SafeRideModal";
+import SecondPassengerCard from "../components/SecondPassengerCard";
+import OfflineCashModal from "../components/OfflineCashModal";
+import AntiStallingBanner from "../components/AntiStallingBanner";
+import PinVerificationModal from "../components/PinVerificationModal";
 import { useLiveLocation } from "../hooks/useLiveLocation";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
@@ -84,7 +89,50 @@ const ActiveRideTracking = () => {
   const [fetchingCandidateTaxis, setFetchingCandidateTaxis] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Anti-Extortion State
+  const [overchargingAlertData, setOverchargingAlertData] = useState(null);
+  const [isDriverLocked, setIsDriverLocked] = useState(false);
+  const [isAntiStallingReassigned, setIsAntiStallingReassigned] = useState(false);
+  const [newReassignedDriverName, setNewReassignedDriverName] = useState(null);
+
   const userId = dbUser?.clerkId || dbUser?._id || clerkUser?.id;
+
+  const handleVerifyCash = async (amount) => {
+    try {
+      const res = await axios.post("http://localhost:5000/api/rides/verify-cash", {
+        rideId: id,
+        cashCollected: amount,
+      });
+      if (res.data?.data?.isOvercharging) {
+        toast.error("🚨 Overcharging Alert Triggered! Extra cash rejected.");
+        setOverchargingAlertData(res.data.data);
+      } else {
+        toast.success(res.data?.message || "✅ Cash Payment Verified!");
+        fetchRideDetails();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Cash verification failed");
+    }
+  };
+
+  const handleUnlockPin = async (pin) => {
+    try {
+      const res = await axios.post("http://localhost:5000/api/rides/unlock-driver-pin", {
+        rideId: id,
+        enteredPin: pin,
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message);
+        setIsDriverLocked(false);
+        setOverchargingAlertData(null);
+        fetchRideDetails();
+      } else {
+        toast.error(res.data?.message || "Invalid PIN");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "PIN verification failed");
+    }
+  };
 
   useEffect(() => {
     if (id) {
@@ -93,7 +141,7 @@ const ActiveRideTracking = () => {
 
       socket.emit("joinRide", { rideId: id });
 
-      // SOCKET LISTENERS FOR ALL 11 EVENTS
+      // SOCKET LISTENERS FOR ALL 11 EVENTS + ANTI-EXTORTION
       const handleRideConfirmed = (data) => {
         toast.success(data.message || "✅ Ride Confirmed! Driver assigned.");
         fetchRideDetails();
@@ -105,23 +153,22 @@ const ActiveRideTracking = () => {
       };
 
       const handleTrafficDetected = (data) => {
-        toast.error(`⚠️ Traffic Delay Detected (+${data.trafficDelayMinutes || 8} mins)`, { icon: "🚦" });
-        fetchRideDetails();
+        toast("⚠️ Traffic Congestion Ahead: " + data.message, { icon: "🚦" });
       };
 
       const handleOptimizationSuggested = (data) => {
-        toast("🚀 Better Ride Available via AI Optimization!", { icon: "⚡" });
         setOptRecommendation(data);
+        toast("⚡ Smart Route Optimization Available!", { icon: "💡" });
       };
 
       const handleSwitchAccepted = (data) => {
-        toast.success(data.message || "Taxi switch executed successfully.");
+        toast.success("Taxi switch executed successfully!");
+        setOptRecommendation(null);
         fetchRideDetails();
       };
 
       const handleSwitchRejected = () => {
         toast("Taxi switch declined.");
-        setOptRecommendation(null);
       };
 
       const handleNearbyTaxiUpdated = (data) => {
@@ -148,6 +195,27 @@ const ActiveRideTracking = () => {
         }
       };
 
+      const handleOverchargingAlert = (data) => {
+        setOverchargingAlertData(data);
+        toast.error(data.message || "🚨 Overcharging Alert Triggered!", { duration: 6000 });
+      };
+
+      const handleDriverAppLocked = (data) => {
+        setIsDriverLocked(true);
+        toast.error(data.message || "❌ Driver App Locked! Enter 4-digit PIN.");
+      };
+
+      const handleInstantPayoutCompleted = (data) => {
+        toast.success(data.message || "💰 Instant Payout Executed!", { duration: 6000 });
+      };
+
+      const handleAntiStallingTriggered = (data) => {
+        setIsAntiStallingReassigned(true);
+        setNewReassignedDriverName(data.newDriverName);
+        toast.success(data.message || "⚡ Anti-Stalling Protection Activated!", { duration: 7000 });
+        fetchRideDetails();
+      };
+
       const handleRideUpdated = () => fetchRideDetails();
 
       socket.on("rideConfirmed", handleRideConfirmed);
@@ -164,6 +232,10 @@ const ActiveRideTracking = () => {
       socket.on("rideConvertedToPrivate", handleRideConvertedToPrivate);
       socket.on("SOSActivated", handleSOSActivated);
       socket.on("newRideChatMessage", handleNewChatMessage);
+      socket.on("overchargingAlertTriggered", handleOverchargingAlert);
+      socket.on("driverAppLocked", handleDriverAppLocked);
+      socket.on("instantPayoutCompleted", handleInstantPayoutCompleted);
+      socket.on("driverAntiStallingTriggered", handleAntiStallingTriggered);
       socket.on("rideUpdated", handleRideUpdated);
 
       return () => {
@@ -421,6 +493,40 @@ const ActiveRideTracking = () => {
         </div>
       </div>
 
+      {/* CORE FUNCTION 3: ANTI-STALLING TELEMETRY BANNER */}
+      <AntiStallingBanner
+        stationarySeconds={ride.stationarySeconds || 0}
+        driverName={ride.driverName}
+        isReassigned={isAntiStallingReassigned}
+        newDriverName={newReassignedDriverName || ride.driverName}
+        onTriggerReassign={fetchRideDetails}
+      />
+
+      {/* CORE FUNCTION 1: OFFLINE CASH VERIFICATION & OVERCHARGING ALERT MODAL */}
+      <OfflineCashModal
+        rideId={ride._id}
+        appLockedFare={ride.pricePerSeat || ride.lockedFare || 100}
+        isDriver={dbUser?.role === "Driver" || ride.driverId === userId}
+        dropPin={ride.dropPin || "7182"}
+        onVerifyCash={handleVerifyCash}
+        onUnlockPin={handleUnlockPin}
+        isLocked={isDriverLocked || ride.driverAppLocked}
+        overchargingAlertData={overchargingAlertData}
+      />
+
+      {/* FEATURES 1-5: PIN VERIFICATION & DRIVER FREEZE/UNFREEZE MODAL */}
+      <PinVerificationModal
+        rideId={ride._id}
+        isDriver={dbUser?.role === "Driver" || ride.driverId === userId}
+        pickupPin={ride.pickupPin || "4892"}
+        dropPin={ride.dropPin || "7182"}
+        emergencyPin={ride.emergencyPin}
+        isFrozen={dbUser?.isFrozen || isDriverLocked}
+        pickupPinVerified={ride.pickupPinVerified}
+        dropPinVerified={ride.dropPinVerified}
+        onRefresh={fetchRideDetails}
+      />
+
       {/* SECTION 6 & 7: AI RIDE OPTIMIZATION LIVE RECOMMENDATION ALERT BANNER */}
       {(optRecommendation || ride.dynamicSwitchSuggested) && (
         <TaxiSwitchCard
@@ -496,9 +602,20 @@ const ActiveRideTracking = () => {
           destinationCoords={ride.destinationCoords}
           destinationName={ride.destination}
           routeGeometry={routeGeometry}
+          currentStage={ride.currentStage || "Driver Assigned"}
+          rideStatus={ride.status}
           isRideActive={ride.status !== "completed"}
         />
       </div>
+
+      {/* FEATURE 8 & 9: SECOND PASSENGER FARE BREAKDOWN & SUMMARY */}
+      {ride.passengers && ride.passengers.length >= 2 && (
+        <SecondPassengerCard
+          ride={ride}
+          passengers={ride.passengers}
+          sharedFareTotal={ride.sharedFareTotal}
+        />
+      )}
 
       {/* MAIN GRID: SECTION 3 TIMELINE & SECTION 4 RIDE INFO & SECTION 5 CONTROLS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

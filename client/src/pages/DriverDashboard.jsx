@@ -19,6 +19,7 @@ import {
   Radio,
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
+import axios from "axios";
 import {
   getUserRideHistoryApi,
   confirmBookingApi,
@@ -28,6 +29,7 @@ import {
 } from "../services/api";
 import { useLiveLocation } from "../hooks/useLiveLocation";
 import OfflineBookingModal from "../components/OfflineBookingModal";
+import OfflineCashModal from "../components/OfflineCashModal";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
 import { MessageSquare, X, Send } from "lucide-react";
@@ -53,6 +55,20 @@ const DriverDashboard = () => {
   const [driverAlert, setDriverAlert] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [driverPinInput, setDriverPinInput] = useState({});
+
+  const handleToggleAvailability = () => {
+    const nextState = !isAvailable;
+    setIsAvailable(nextState);
+    const driverId = clerkUser?.id || dbUser?.clerkId || "driver_demo";
+    if (nextState) {
+      socket.emit("driver-online", { driverId, latitude: 12.9716, longitude: 77.5946 });
+      toast.success("You are now ONLINE. Nearby passengers can view your taxi!", { icon: "🟢" });
+    } else {
+      socket.emit("driver-offline", { driverId });
+      toast("You are now OFFLINE.", { icon: "🔴" });
+    }
+  };
 
   // In-Ride Chat State
   const [showDriverChat, setShowDriverChat] = useState(false);
@@ -177,6 +193,66 @@ const DriverDashboard = () => {
     }
   };
 
+  const handleTriggerInstantPayout = async (rideId, amount) => {
+    try {
+      setActionLoading(true);
+      const res = await axios.post("http://localhost:5000/api/rides/instant-payout", {
+        rideId: rideId || activeSelectedRide?._id,
+        totalFareAmount: amount || 300,
+        driverId: clerkUser?.id || dbUser?.clerkId,
+        driverUpiId: dbUser?.upiId || "driver@upi",
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message, { duration: 6000 });
+        fetchDriverRides();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Instant payout failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleVerifyCash = async (amount) => {
+    try {
+      setActionLoading(true);
+      const res = await axios.post("http://localhost:5000/api/rides/verify-cash", {
+        rideId: activeSelectedRide?._id,
+        cashCollected: amount,
+      });
+      if (res.data?.data?.isOvercharging) {
+        toast.error("❌ OVERCHARGING ALERT: App locked! Enter 4-digit Passenger PIN to unlock.");
+      } else {
+        toast.success(res.data?.message || "✅ Cash Payment Verified!");
+        fetchDriverRides();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Cash verification failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnlockPin = async (pin) => {
+    try {
+      setActionLoading(true);
+      const res = await axios.post("http://localhost:5000/api/rides/unlock-driver-pin", {
+        rideId: activeSelectedRide?._id,
+        enteredPin: pin,
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message);
+        fetchDriverRides();
+      } else {
+        toast.error(res.data?.message || "Invalid PIN");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "PIN verification failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const activeRides = driverRides.filter((r) => r.status === "active" || r.status === "scheduled");
   const completedRides = driverRides.filter((r) => r.status === "completed");
 
@@ -291,6 +367,41 @@ const DriverDashboard = () => {
           </button>
         </div>
       )}
+
+      {/* CORE FUNCTION 1 & 2: OFFLINE CASH VERIFICATION MODAL & INSTANT PAYOUT BANNER */}
+      {activeSelectedRide && (
+        <OfflineCashModal
+          rideId={activeSelectedRide._id}
+          appLockedFare={activeSelectedRide.pricePerSeat || activeSelectedRide.lockedFare || 100}
+          isDriver={true}
+          dropPin={activeSelectedRide.dropPin || "7182"}
+          onVerifyCash={handleVerifyCash}
+          onUnlockPin={handleUnlockPin}
+          isLocked={activeSelectedRide.driverAppLocked}
+        />
+      )}
+
+      {/* CORE FUNCTION 2: 60-SECOND INSTANT UPI PAYOUT ACTION BANNER */}
+      <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-indigo-950/80 border border-emerald-500/30 p-5 rounded-3xl shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
+            60-Second Settlement Gateway
+          </span>
+          <h4 className="text-sm font-black text-white mt-1">Instant Online Earnings Payout to UPI</h4>
+          <p className="text-xs text-slate-400">
+            Routes 100% of driver net earnings (85%) directly to your UPI/bank account within 60s of ride completion.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={actionLoading || !activeSelectedRide}
+          onClick={() => handleTriggerInstantPayout(activeSelectedRide?._id, 300)}
+          className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/30 shrink-0 transition-all hover:scale-105"
+        >
+          {actionLoading ? "Processing Payout..." : "Trigger 60s UPI Payout 💰"}
+        </button>
+      </div>
 
       {/* Driver Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
@@ -532,6 +643,37 @@ const DriverDashboard = () => {
                         ))}
                     </div>
                   )}
+
+                  {/* Driver Dedicated 4-Digit Passenger PIN Entry Verification Box */}
+                  <div className="mt-3 p-3.5 rounded-xl bg-slate-900 border border-emerald-500/40 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Enter Passenger 4-Digit PIN
+                      </span>
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                        VERIFICATION BOX
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        maxLength={4}
+                        placeholder="Enter 4-digit PIN..."
+                        value={driverPinInput[ride._id] || ""}
+                        onChange={(e) => setDriverPinInput((prev) => ({ ...prev, [ride._id]: e.target.value }))}
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-center text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        disabled={actionLoading || !driverPinInput[ride._id]}
+                        onClick={() => handleUnlockPin(driverPinInput[ride._id])}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 shadow-md transition-colors shrink-0"
+                      >
+                        Verify PIN
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Driver Live Stage Controller Section */}
                   <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2" onClick={(e) => e.stopPropagation()}>

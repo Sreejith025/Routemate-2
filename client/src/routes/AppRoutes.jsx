@@ -22,6 +22,7 @@ import RideHistory from "../pages/RideHistory";
 import EmergencyDispatch from "../pages/EmergencyDispatch";
 import AdminEmergencyDashboard from "../pages/AdminEmergencyDashboard";
 import AdminFareSafetyDashboard from "../pages/AdminFareSafetyDashboard";
+import ClientDashboard from "../pages/ClientDashboard";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -84,6 +85,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute allowedRoles={["Admin"]}>
               <AdminFareSafetyDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/client-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["Admin"]}>
+              <ClientDashboard />
             </ProtectedRoute>
           }
         />

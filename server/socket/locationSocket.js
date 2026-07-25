@@ -10,8 +10,50 @@ export const registerLocationSocketHandlers = (io) => {
   io.on("connection", (socket) => {
     console.log(`📡 Socket connected for live tracking: ${socket.id}`);
 
+    // 1. driver-online: Driver goes online
+    socket.on("driver-online", async (data) => {
+      try {
+        const { driverId, latitude, longitude } = data || {};
+        if (!driverId) return;
+
+        if (latitude != null && longitude != null) {
+          await LiveLocation.findOneAndUpdate(
+            { userId: driverId, role: "Driver" },
+            {
+              userId: driverId,
+              role: "Driver",
+              latitude,
+              longitude,
+              updatedAt: new Date(),
+            },
+            { upsert: true, new: true }
+          );
+        }
+
+        io.emit("driver-online", { driverId, status: "Online", timestamp: new Date().toISOString() });
+        io.emit("nearby-drivers-updated", { message: `Driver ${driverId} is online.` });
+      } catch (err) {
+        console.error("Error in driver-online event:", err);
+      }
+    });
+
+    // 2. driver-offline: Driver goes offline (removes marker immediately)
+    socket.on("driver-offline", async (data) => {
+      try {
+        const { driverId } = data || {};
+        if (!driverId) return;
+
+        await LiveLocation.findOneAndDelete({ userId: driverId, role: "Driver" });
+
+        io.emit("driver-offline", { driverId, status: "Offline", timestamp: new Date().toISOString() });
+        io.emit("nearby-drivers-updated", { message: `Driver ${driverId} went offline.` });
+      } catch (err) {
+        console.error("Error in driver-offline event:", err);
+      }
+    });
+
     // User joins a specific ride room
-    socket.on("join-ride", async (data) => {
+    const handleJoinRide = async (data) => {
       try {
         const { rideId, userId, role } = data || {};
         if (!rideId) return;
@@ -27,22 +69,25 @@ export const registerLocationSocketHandlers = (io) => {
       } catch (err) {
         console.error("Error in join-ride event:", err);
       }
-    });
+    };
 
-    // Driver emits location update -> monitor traffic, calculate ETA & evaluate taxi switch
+    socket.on("join-ride", handleJoinRide);
+    socket.on("joinRide", handleJoinRide);
+
+    // 3. driver-location-update: Throttled driver position update
     socket.on("driver-location-update", async (data) => {
       try {
         const { rideId, driverId, latitude, longitude, speed, heading, accuracy } = data || {};
-        if (!rideId || !driverId || latitude === undefined || longitude === undefined) return;
+        if (latitude === undefined || longitude === undefined) return;
 
-        const roomName = `ride_${rideId}`;
+        const dId = driverId || socket.userId || "demo_driver";
 
         // Upsert live location in MongoDB
         await LiveLocation.findOneAndUpdate(
-          { rideId, userId: driverId },
+          { userId: dId, role: "Driver" },
           {
-            rideId,
-            userId: driverId,
+            rideId: rideId || null,
+            userId: dId,
             role: "Driver",
             latitude,
             longitude,
@@ -54,39 +99,45 @@ export const registerLocationSocketHandlers = (io) => {
           { upsert: true, new: true }
         );
 
-        // Broadcast driver location update to everyone in the ride room
-        io.to(roomName).emit("driver-location-update", {
+        const updatePayload = {
           rideId,
-          driverId,
+          driverId: dId,
           latitude,
           longitude,
           speed: speed || 0,
           heading: heading || 0,
           accuracy: accuracy || 0,
           updatedAt: new Date().toISOString(),
-        });
+        };
 
-        // Continuously monitor traffic congestion & trigger intelligent taxi switch if ETA delay detected
-        evaluateAndTriggerTaxiSwitch(io, rideId, driverId, latitude, longitude, speed || 0);
+        if (rideId) {
+          io.to(`ride_${rideId}`).emit("driver-location-update", updatePayload);
+        }
+        io.emit("driver-location-update", updatePayload);
+        io.emit("nearby-drivers-updated", updatePayload);
+
+        // Continuously evaluate traffic congestion & ETA
+        if (rideId) {
+          evaluateAndTriggerTaxiSwitch(io, rideId, dId, latitude, longitude, speed || 0);
+        }
       } catch (err) {
         console.error("Error in driver-location-update socket handler:", err);
       }
     });
 
-    // Passenger emits location update
+    // 4. passenger-location-update
     socket.on("passenger-location-update", async (data) => {
       try {
         const { rideId, passengerId, latitude, longitude, speed, heading, accuracy } = data || {};
-        if (!rideId || !passengerId || latitude === undefined || longitude === undefined) return;
+        if (latitude === undefined || longitude === undefined) return;
 
-        const roomName = `ride_${rideId}`;
+        const pId = passengerId || socket.userId || "demo_passenger";
 
-        // Upsert live location in MongoDB
         await LiveLocation.findOneAndUpdate(
-          { rideId, userId: passengerId },
+          { userId: pId, role: "Passenger" },
           {
-            rideId,
-            userId: passengerId,
+            rideId: rideId || null,
+            userId: pId,
             role: "Passenger",
             latitude,
             longitude,
@@ -98,73 +149,56 @@ export const registerLocationSocketHandlers = (io) => {
           { upsert: true, new: true }
         );
 
-        // Broadcast passenger location update to everyone in the ride room
-        io.to(roomName).emit("passenger-location-update", {
+        const updatePayload = {
           rideId,
-          passengerId,
+          passengerId: pId,
           latitude,
           longitude,
           speed: speed || 0,
           heading: heading || 0,
           accuracy: accuracy || 0,
           updatedAt: new Date().toISOString(),
-        });
+        };
+
+        if (rideId) {
+          io.to(`ride_${rideId}`).emit("passenger-location-update", updatePayload);
+        }
       } catch (err) {
         console.error("Error in passenger-location-update socket handler:", err);
       }
     });
 
-    // Trigger taxi switch recommendation (explicit socket request)
-    socket.on("trigger-taxi-switch", async (data) => {
+    // 5. ride-confirmed
+    socket.on("ride-confirmed", async (data) => {
       try {
-        const { rideId, driverId, latitude, longitude, speed } = data || {};
-        if (rideId) {
-          const result = await evaluateAndTriggerTaxiSwitch(io, rideId, driverId, latitude || 12.9716, longitude || 77.5946, speed || 10);
-          if (result) {
-            socket.emit("taxi-switch-evaluated", result);
-          }
-        }
+        const { rideId, driverId, passengerId } = data || {};
+        if (!rideId) return;
+
+        io.to(`ride_${rideId}`).emit("ride-confirmed", {
+          rideId,
+          driverId,
+          passengerId,
+          status: "confirmed",
+          timestamp: new Date().toISOString(),
+        });
       } catch (err) {
-        console.error("Error in trigger-taxi-switch socket handler:", err);
+        console.error("Error in ride-confirmed event:", err);
       }
     });
 
-    // Passenger accepts taxi switch recommendation via Socket.IO
-    socket.on("accept-taxi-switch", async (data) => {
-      try {
-        const { rideId } = data || {};
-        if (rideId) {
-          await processTaxiSwitchResponse(io, rideId, "accept");
-        }
-      } catch (err) {
-        console.error("Error in accept-taxi-switch socket handler:", err);
-      }
-    });
-
-    // Passenger declines taxi switch recommendation via Socket.IO
-    socket.on("decline-taxi-switch", async (data) => {
-      try {
-        const { rideId } = data || {};
-        if (rideId) {
-          await processTaxiSwitchResponse(io, rideId, "decline");
-        }
-      } catch (err) {
-        console.error("Error in decline-taxi-switch socket handler:", err);
-      }
-    });
-
-    // Driver starts ride
+    // 6. ride-started
     socket.on("ride-started", async (data) => {
       try {
         const { rideId } = data || {};
         if (!rideId) return;
 
-        await Ride.findByIdAndUpdate(rideId, { status: "active" });
+        await Ride.findByIdAndUpdate(rideId, { status: "active", currentStage: "Shared Ride Started" });
 
         const roomName = `ride_${rideId}`;
         io.to(roomName).emit("ride-started", {
           rideId,
           status: "active",
+          stage: "Shared Ride Started",
           timestamp: new Date().toISOString(),
         });
       } catch (err) {
@@ -172,22 +206,92 @@ export const registerLocationSocketHandlers = (io) => {
       }
     });
 
-    // Driver ends ride
-    socket.on("ride-ended", async (data) => {
+    // 7. ride-completed
+    socket.on("ride-completed", async (data) => {
       try {
         const { rideId } = data || {};
         if (!rideId) return;
 
-        await Ride.findByIdAndUpdate(rideId, { status: "completed" });
+        await Ride.findByIdAndUpdate(rideId, { status: "completed", currentStage: "Ride Completed" });
 
         const roomName = `ride_${rideId}`;
-        io.to(roomName).emit("ride-ended", {
+        io.to(roomName).emit("ride-completed", {
           rideId,
           status: "completed",
+          stage: "Ride Completed",
           timestamp: new Date().toISOString(),
         });
       } catch (err) {
-        console.error("Error in ride-ended event:", err);
+        console.error("Error in ride-completed event:", err);
+      }
+    });
+
+    // 8. ETA-updated & traffic-updated & second-passenger socket events
+    socket.on("ETA-updated", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("ETA-updated", data);
+      }
+    });
+
+    socket.on("traffic-updated", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("traffic-updated", data);
+      }
+    });
+
+    socket.on("second-passenger-requested", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("second-passenger-requested", data);
+      }
+    });
+
+    socket.on("second-passenger-confirmed", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("second-passenger-confirmed", data);
+      }
+    });
+
+    socket.on("route-updated", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("route-updated", data);
+      }
+    });
+
+    socket.on("fare-updated", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("fare-updated", data);
+      }
+    });
+
+    socket.on("ride-updated", (data) => {
+      if (data?._id || data?.rideId) {
+        const id = data._id || data.rideId;
+        io.to(`ride_${id}`).emit("ride-updated", data);
+      }
+    });
+
+    // Anti-Extortion Core Socket Handlers
+    socket.on("verify-cash-amount", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("verify-cash-amount", data);
+      }
+    });
+
+    socket.on("unlock-driver-pin", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("unlock-driver-pin", data);
+      }
+    });
+
+    socket.on("instant-payout-executed", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("instant-payout-executed", data);
+      }
+    });
+
+    socket.on("anti-stalling-check", (data) => {
+      if (data?.rideId) {
+        io.to(`ride_${data.rideId}`).emit("anti-stalling-check", data);
       }
     });
 

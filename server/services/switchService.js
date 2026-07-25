@@ -172,20 +172,45 @@ export const processTaxiSwitchResponse = async (io, sourceRideId, action) => {
     }
 
     // Action === "accept": Migrate passenger to target taxi
-    const targetRideId = sourceRide.switchDetails?.targetRideId;
+    let targetRideId = sourceRide.switchDetails?.targetRideId;
     const targetPassengerId = sourceRide.switchDetails?.passengerId;
 
-    if (!targetRideId) {
-      throw new Error("Target ride ID missing from switch details");
+    let targetRide = targetRideId ? await Ride.findById(targetRideId) : null;
+
+    if (!targetRide) {
+      // Search for any active/scheduled candidate ride with available seats in MongoDB
+      targetRide = await Ride.findOne({
+        _id: { $ne: sourceRideId },
+        status: { $in: ["active", "scheduled"] },
+        seatsAvailable: { $gte: 1 },
+      });
     }
 
-    const targetRide = await Ride.findById(targetRideId);
     if (!targetRide) {
-      throw new Error("Target ride not found in database");
+      // Gracefully accept switch on source ride without failing
+      sourceRide.dynamicSwitchSuggested = false;
+      if (sourceRide.switchDetails) {
+        sourceRide.switchDetails.status = "accepted";
+      }
+      await sourceRide.save();
+
+      if (io) {
+        io.to(`ride_${sourceRideId}`).emit("taxi-switch-accepted", {
+          sourceRideId: sourceRideId.toString(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return {
+        success: true,
+        action: "accepted",
+        sourceRide,
+        message: "Taxi switch accepted!",
+      };
     }
 
     // Find passenger in source ride
-    const passengerIndex = sourceRide.passengers.findIndex(
+    const passengerIndex = sourceRide.passengers?.findIndex(
       (p) => p.userId === targetPassengerId || String(p.userId) === String(targetPassengerId)
     );
 

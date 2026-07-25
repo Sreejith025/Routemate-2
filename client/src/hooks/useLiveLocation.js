@@ -6,12 +6,12 @@ import { updateLocationApi, getRideLocationsApi } from "../services/locationServ
  * Calculates Haversine distance in meters between two lat/lng points
  */
 export const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
   const R = 6371e3; // Earth radius in meters
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+  const φ1 = (Number(lat1) * Math.PI) / 180;
+  const φ2 = (Number(lat2) * Math.PI) / 180;
+  const Δφ = ((Number(lat2) - Number(lat1)) * Math.PI) / 180;
+  const Δλ = ((Number(lon2) - Number(lon1)) * Math.PI) / 180;
 
   const a =
     Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
@@ -39,7 +39,7 @@ export const useLiveLocation = ({
   const [distanceRemaining, setDistanceRemaining] = useState(0); // in km
   const [totalDistanceTraveled, setTotalDistanceTraveled] = useState(0); // in km
   const [etaMinutes, setEtaMinutes] = useState(0);
-  const [gpsStatus, setGpsStatus] = useState("Initializing GPS..."); // 'Tracking', 'Permission Denied', 'Unavailable', etc.
+  const [gpsStatus, setGpsStatus] = useState("Initializing GPS...");
   const [rideStatus, setRideStatus] = useState("scheduled");
   const [socketConnected, setSocketConnected] = useState(socket.connected);
   const [switchSuggestion, setSwitchSuggestion] = useState(null);
@@ -67,39 +67,43 @@ export const useLiveLocation = ({
     }
   }, [rideId]);
 
-  // 2. Fetch OSRM Route & ETA from Driver location to Destination
+  // 2. Fetch OSRM Route & ETA from Driver location to Destination (Format: lng,lat;lng,lat)
   const fetchOSRMRoute = useCallback(async (startLat, startLng, destLat, destLng) => {
     if (!startLat || !startLng || !destLat || !destLng) return;
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+      console.log("🌐 [OSRM Request]", url);
       const res = await fetch(url);
       const data = await res.json();
 
       if (data.routes && data.routes.length > 0) {
         const route = data.routes[0];
-        const coordinates = route.geometry.coordinates.map((c) => [c[1], c[0]]); // GeoJSON is [lng, lat] -> Leaflet expects [lat, lng]
+        const coordinates = route.geometry.coordinates.map((c) => [c[1], c[0]]); // GeoJSON [lng, lat] -> Leaflet [lat, lng]
         setRouteGeometry(coordinates);
-        setDistanceRemaining(Number((route.distance / 1000).toFixed(2))); // convert meters to km
-        setEtaMinutes(Math.max(1, Math.round(route.duration / 60))); // convert seconds to minutes
+        const distKm = Number((route.distance / 1000).toFixed(2));
+        const etaMins = Math.max(1, Math.round(route.duration / 60));
+        setDistanceRemaining(distKm);
+        setEtaMinutes(etaMins);
+        console.log("✅ [OSRM Response]", { distKm, etaMins, pointsCount: coordinates.length });
       }
     } catch (err) {
       console.warn("OSRM Route fetch error:", err?.message);
-      // Fallback calculation using straight-line distance
       const distMeters = calculateDistanceMeters(startLat, startLng, destLat, destLng);
-      setDistanceRemaining(Number((distMeters / 1000).toFixed(2)));
-      setEtaMinutes(Math.max(1, Math.round(distMeters / 500))); // Rough estimate (~30 km/h)
+      const distKm = Number((distMeters / 1000).toFixed(2));
+      setDistanceRemaining(distKm);
+      setEtaMinutes(Math.max(1, Math.round(distMeters / 500)));
     }
   }, []);
 
-  // 3. Update route and ETA whenever driver location, current location, or destination changes
+  // 3. Update route and ETA whenever driver location or destination changes
   useEffect(() => {
     const startPoint =
       role === "Driver"
         ? currentLocation
         : driverLocation || currentLocation;
 
-    const startLat = startPoint?.latitude || startPoint?.lat;
-    const startLng = startPoint?.longitude || startPoint?.lng;
+    const startLat = startPoint?.latitude ?? startPoint?.lat;
+    const startLng = startPoint?.longitude ?? startPoint?.lng;
 
     if (startLat && startLng && destinationCoords?.lat && destinationCoords?.lng) {
       fetchOSRMRoute(
@@ -119,6 +123,8 @@ export const useLiveLocation = ({
       setSocketConnected(true);
       setGpsStatus((prev) => (prev.includes("Disconnect") ? "Connected" : prev));
       socket.emit("join-ride", { rideId, userId, role });
+      socket.emit("joinRide", { rideId, userId, role });
+      console.log(`🔌 [Socket Room Joined] rideId=${rideId}, userId=${userId}, role=${role}`);
     };
 
     const handleDisconnect = () => {
@@ -127,15 +133,17 @@ export const useLiveLocation = ({
     };
 
     const handleDriverUpdate = (data) => {
-      if (data.rideId === rideId) {
+      if (data.rideId === rideId || !data.rideId) {
+        console.log("📡 [Socket Received] driver-location-update:", data);
         setDriverLocation(data);
       }
     };
 
     const handlePassengerUpdate = (data) => {
-      if (data.rideId === rideId) {
+      if (data.rideId === rideId || !data.rideId) {
+        console.log("📡 [Socket Received] passenger-location-update:", data);
         setPassengerLocations((prev) => {
-          const idx = prev.findIndex((p) => p.userId === data.passengerId);
+          const idx = prev.findIndex((p) => p.userId === (data.passengerId || data.userId));
           if (idx >= 0) {
             const updated = [...prev];
             updated[idx] = data;
@@ -147,34 +155,11 @@ export const useLiveLocation = ({
     };
 
     const handleRideStarted = (data) => {
-      if (data.rideId === rideId) {
-        setRideStatus("active");
-      }
+      if (data.rideId === rideId) setRideStatus("active");
     };
 
     const handleRideEnded = (data) => {
-      if (data.rideId === rideId) {
-        setRideStatus("completed");
-      }
-    };
-
-    const handleTaxiSwitchSuggested = (data) => {
-      if (data.rideId === rideId || data.passengerId === userId) {
-        setSwitchSuggestion(data);
-      }
-    };
-
-    const handleTaxiSwitchAccepted = (data) => {
-      if (data.sourceRideId === rideId || data.targetRideId === rideId || data.passengerId === userId) {
-        setSwitchSuggestion(null);
-        fetchInitialLocations();
-      }
-    };
-
-    const handleRouteUpdated = (data) => {
-      if (data.rideId === rideId) {
-        fetchInitialLocations();
-      }
+      if (data.rideId === rideId) setRideStatus("completed");
     };
 
     if (socket.connected) {
@@ -189,10 +174,6 @@ export const useLiveLocation = ({
     socket.on("passenger-location-update", handlePassengerUpdate);
     socket.on("ride-started", handleRideStarted);
     socket.on("ride-ended", handleRideEnded);
-    socket.on("taxi-switch-suggested", handleTaxiSwitchSuggested);
-    socket.on("trigger_taxi_switch", handleTaxiSwitchSuggested);
-    socket.on("taxi-switch-accepted", handleTaxiSwitchAccepted);
-    socket.on("route-updated", handleRouteUpdated);
 
     fetchInitialLocations();
 
@@ -203,10 +184,6 @@ export const useLiveLocation = ({
       socket.off("passenger-location-update", handlePassengerUpdate);
       socket.off("ride-started", handleRideStarted);
       socket.off("ride-ended", handleRideEnded);
-      socket.off("taxi-switch-suggested", handleTaxiSwitchSuggested);
-      socket.off("trigger_taxi_switch", handleTaxiSwitchSuggested);
-      socket.off("taxi-switch-accepted", handleTaxiSwitchAccepted);
-      socket.off("route-updated", handleRouteUpdated);
     };
   }, [rideId, userId, role, fetchInitialLocations]);
 
@@ -233,18 +210,30 @@ export const useLiveLocation = ({
       const now = Date.now();
 
       const newLocation = {
-        latitude,
-        longitude,
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        lat: Number(latitude),
+        lng: Number(longitude),
         speed: speed || 0,
         heading: heading || 0,
         accuracy: accuracy || 0,
         updatedAt: new Date(position.timestamp).toISOString(),
       };
 
+      console.log("📍 [GPS Watch Update]", {
+        role,
+        latitude,
+        longitude,
+        accuracy: `±${Math.round(accuracy || 0)}m`,
+        speedKmh: Math.round((speed || 0) * 3.6) + " km/h",
+        heading: (heading || 0) + "°",
+        timestamp: newLocation.updatedAt,
+      });
+
       setCurrentLocation(newLocation);
       setGpsStatus("GPS Signal Active");
 
-      // Check distance moved from last point
+      // Calculate movement
       let distanceMoved = 0;
       if (lastLocationRef.current) {
         distanceMoved = calculateDistanceMeters(
@@ -255,7 +244,7 @@ export const useLiveLocation = ({
         );
       }
 
-      // 10. Performance optimization: filter movements < 5 meters and throttle to every 2-3 seconds
+      // Filter movements < 5m & throttle updates to every 2-3s
       const isTimeElapsed = now - lastEmitTimeRef.current >= 2000;
       const isSignificantMove = !lastLocationRef.current || distanceMoved >= 5;
 
@@ -271,8 +260,10 @@ export const useLiveLocation = ({
         const payload = {
           rideId,
           role,
-          latitude,
-          longitude,
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          lat: Number(latitude),
+          lng: Number(longitude),
           speed: speed || 0,
           heading: heading || 0,
           accuracy: accuracy || 0,
@@ -287,7 +278,6 @@ export const useLiveLocation = ({
           socket.emit("passenger-location-update", payload);
         }
 
-        // Persist location update to MongoDB database
         try {
           await updateLocationApi(payload);
         } catch (err) {
@@ -333,7 +323,6 @@ export const useLiveLocation = ({
     };
   }, [rideId, userId, role, isTrackingActive]);
 
-  // Helper actions to broadcast ride status changes
   const startRide = useCallback(() => {
     if (rideId) {
       socket.emit("ride-started", { rideId });

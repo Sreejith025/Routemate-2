@@ -168,29 +168,71 @@ export const getRideById = async (req, res) => {
  */
 export const createRide = async (req, res) => {
   try {
-    const userId = req.auth?.userId || req.body?.driverId || "driver_demo_id";
-    const { origin, destination, originCoords, destinationCoords, departureTime, seatsAvailable, pricePerSeat, vehicleDetails, driverName: bodyDriverName } = req.body;
-    
-    // Fetch driver details from MongoDB
-    const mongoUser = userId ? await User.findOne({ clerkId: userId }) : null;
+    const authObj = typeof req.auth === "function" ? req.auth() : req.auth;
+    const rawUserId = authObj?.userId || req.body?.driverId || req.mongoUser?.clerkId || "driver_demo_id";
+    const userId = typeof rawUserId === "string" ? rawUserId : "driver_demo_id";
+
+    const {
+      origin,
+      destination,
+      originCoords,
+      destinationCoords,
+      departureTime,
+      seatsAvailable,
+      pricePerSeat,
+      vehicleDetails,
+      driverName: bodyDriverName,
+      driverPhoto,
+    } = req.body;
+
+    const finalOrigin = (origin && String(origin).trim()) || "Departure Location";
+    const finalDestination = (destination && String(destination).trim()) || "Destination Target";
+
+    // Fetch driver details from MongoDB User collection
+    let mongoUser = null;
+    if (userId && userId !== "driver_demo_id") {
+      try {
+        mongoUser = await User.findOne({ clerkId: userId });
+      } catch (err) {
+        console.warn("User lookup in createRide warning:", err.message);
+      }
+    }
+
     const driverName = bodyDriverName || mongoUser?.fullName || "Verified Driver";
+    const photo =
+      driverPhoto ||
+      mongoUser?.profileImage ||
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
+
+    const pPrice = Number(pricePerSeat) || 15;
+    const seats = Number(seatsAvailable) || 3;
+    const dropPin = Math.floor(1000 + Math.random() * 9000).toString();
 
     const newRide = await Ride.create({
       driverId: userId,
       driverName,
+      driverPhoto: photo,
       vehicleDetails: vehicleDetails || {
         make: "Toyota",
         model: "Camry",
         plate: "RT-1002",
         color: "Dark Gray",
       },
-      origin,
-      destination,
-      originCoords: originCoords || { lat: 12.9716, lng: 77.5946 },
-      destinationCoords: destinationCoords || { lat: 12.9352, lng: 77.6245 },
+      origin: finalOrigin,
+      destination: finalDestination,
+      originCoords: {
+        lat: Number(originCoords?.lat) || 12.9716,
+        lng: Number(originCoords?.lng) || 77.5946,
+      },
+      destinationCoords: {
+        lat: Number(destinationCoords?.lat) || 12.9352,
+        lng: Number(destinationCoords?.lng) || 77.6245,
+      },
       departureTime: departureTime || "Immediate",
-      seatsAvailable: Number(seatsAvailable) || 3,
-      pricePerSeat: Number(pricePerSeat) || 15,
+      seatsAvailable: seats,
+      pricePerSeat: pPrice,
+      lockedFare: pPrice,
+      dropPin,
       status: "scheduled",
     });
 
@@ -203,7 +245,7 @@ export const createRide = async (req, res) => {
     console.error("Create Ride Error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to create ride in database",
+      message: error.message || "Failed to create ride in database",
       error: error.message,
     });
   }

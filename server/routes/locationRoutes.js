@@ -1,21 +1,21 @@
 import express from "express";
 import {
-  updateLocation,
-  getRideLocations,
-  getDriverLocation,
   getNearbyDrivers,
-} from "../controllers/locationController.js";
-import { requireAuthUser } from "../middleware/authMiddleware.js";
+  getRideLocations,
+  updateLocation,
+  getRideETA,
+  getRideDistance,
+} from "../controllers/driverLocationController.js";
 
 const router = express.Router();
 
-// Require authentication for location routes
-router.use(requireAuthUser);
-
-// Routes
+// Public / Guest & Authenticated Driver Location Routes
 router.get("/nearby-drivers", getNearbyDrivers);
+router.get("/drivers/nearby", getNearbyDrivers);
 router.post("/update", updateLocation);
+router.get("/:rideId/location", getRideLocations);
+router.get("/:rideId/eta", getRideETA);
+router.get("/:rideId/distance", getRideDistance);
 router.get("/:rideId", getRideLocations);
-router.get("/driver/:driverId", getDriverLocation);
 
 export default router;
