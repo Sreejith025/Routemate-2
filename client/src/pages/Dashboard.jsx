@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
 import {
   User,
@@ -25,6 +25,7 @@ import socket from "../services/socket";
 import toast from "react-hot-toast";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { dbUser, clerkUser, role } = useAuthContext();
   const [rides, setRides] = useState([]);
   const [userHistory, setUserHistory] = useState([]);
@@ -35,8 +36,11 @@ const Dashboard = () => {
 
     // Listen for driver manual booking acceptance/rejection
     const handleBookingAccepted = (data) => {
-      toast.success(data.message || "🎉 Driver accepted your booking! Seat confirmed.", { duration: 5000 });
+      toast.success(data.message || "🎉 Driver accepted your booking! Redirecting to Active Ride Tracking...", { duration: 5000 });
       fetchDashboardData();
+      if (data.rideId) {
+        navigate(`/active-ride/${data.rideId}`);
+      }
     };
 
     const handleBookingRejected = (data) => {
@@ -56,9 +60,10 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [ridesRes, historyRes] = await Promise.allSettled([
+      const [ridesRes, historyRes, nearbyRes] = await Promise.allSettled([
         getAvailableRidesApi(),
         getUserRideHistoryApi(),
+        getNearbyDriversApi(),
       ]);
 
       if (ridesRes.status === "fulfilled" && ridesRes.value.data?.rides) {
@@ -66,6 +71,9 @@ const Dashboard = () => {
       }
       if (historyRes.status === "fulfilled" && historyRes.value.data?.history) {
         setUserHistory(historyRes.value.data.history);
+      }
+      if (nearbyRes.status === "fulfilled" && nearbyRes.value.data?.drivers) {
+        setNearbyDrivers(nearbyRes.value.data.drivers);
       }
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -95,42 +103,72 @@ const Dashboard = () => {
   const completedRides = userHistory.filter((r) => r.status === "completed");
   const activeSwitchRide = userHistory.find((r) => r.dynamicSwitchSuggested || r.switchDetails?.status === "pending");
 
+  const allMapDrivers = useMemo(() => {
+    const list = [];
+    const addedIds = new Set();
+
+    for (const d of nearbyDrivers) {
+      if (d.lat && d.lng) {
+        list.push(d);
+        if (d.driverId) addedIds.add(d.driverId);
+      }
+    }
+
+    for (const r of rides) {
+      if (r.originCoords?.lat && r.originCoords?.lng && (!r.driverId || !addedIds.has(r.driverId))) {
+        list.push({
+          name: r.driverName || "RouteMate Driver",
+          vehicle: r.vehicleDetails ? `${r.vehicleDetails.make} ${r.vehicleDetails.model} (${r.vehicleDetails.plate})` : "RouteMate Taxi",
+          lat: r.originCoords.lat,
+          lng: r.originCoords.lng,
+          rating: r.driverRating || 4.8,
+        });
+      }
+    }
+
+    return list;
+  }, [nearbyDrivers, rides]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Welcome Banner Card */}
-      <div className="relative overflow-hidden p-8 rounded-3xl glass-card border border-indigo-500/20 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-950 shadow-2xl">
-        <div className="absolute -right-10 -bottom-10 w-72 h-72 bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+      {/* Driver / Passenger Header Banner */}
+      <div className="p-8 rounded-3xl glass-card border border-indigo-500/20 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-950 shadow-2xl">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center space-x-4">
             <img
-              src={clerkUser?.imageUrl || dbUser?.profileImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"}
+              src={
+                clerkUser?.imageUrl ||
+                dbUser?.profileImage ||
+                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
+              }
               alt="Profile"
               className="w-16 h-16 rounded-2xl object-cover ring-2 ring-indigo-500/50 shadow-lg"
             />
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-2xl font-black text-white">
-                  Welcome back, {dbUser?.fullName || clerkUser?.firstName || "Passenger"}! 👋
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  {role || "Passenger"}
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 uppercase">
+                  Passenger Dashboard
                 </span>
+                <span className="text-xs font-mono text-emerald-400 font-bold">LIVE METRICS</span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                {dbUser?.email || clerkUser?.primaryEmailAddress?.emailAddress} • MongoDB Synced
+              <h1 className="text-2xl font-black text-white mt-1">
+                Welcome, {dbUser?.fullName || clerkUser?.firstName || "Passenger"}!
+              </h1>
+              <p className="text-xs text-slate-400">
+                Connected User: {dbUser?.email || clerkUser?.primaryEmailAddress?.emailAddress} • MongoDB & Socket Synced
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-3">
             <Link
               to="/find-ride"
               className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-600/30 flex items-center space-x-2 transition-all hover:scale-105"
             >
               <Search className="w-4 h-4" />
-              <span>Book New Ride</span>
+              <span>Find Available Rides</span>
             </Link>
+
             <Link
               to="/profile"
               className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 glass-card hover:bg-slate-800 border border-slate-700 flex items-center space-x-2 transition-colors"
@@ -142,7 +180,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Dynamic Taxi Switch Live Alert Banner (If triggered on an active ride) */}
+      {/* Dynamic Taxi Switch Live Alert Banner */}
       {activeSwitchRide && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -238,26 +276,26 @@ const Dashboard = () => {
 
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Completed Trips</span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Saved CO2 Emissions</span>
+            <Users className="w-5 h-5 text-emerald-400" />
           </div>
-          <p className="text-3xl font-extrabold text-emerald-400 font-mono">{completedRides.length}</p>
-          <p className="text-xs text-slate-400">Safely Arrived</p>
+          <p className="text-3xl font-extrabold text-emerald-400">{(userHistory.length * 2.4).toFixed(1)} kg</p>
+          <p className="text-xs text-emerald-400 font-bold">Shared Ride Impact</p>
         </div>
 
         <div className="p-6 rounded-2xl glass-card border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Account Status</span>
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Money Saved</span>
+            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              RE-OPTIMIZED
+            </span>
           </div>
-          <p className="text-lg font-bold text-emerald-400 flex items-center gap-1.5 pt-1">
-            <Award className="w-5 h-5" /> Verified
-          </p>
-          <p className="text-xs text-slate-500">Clerk & MongoDB Synced</p>
+          <p className="text-3xl font-extrabold text-white">₹{userHistory.length * 180}</p>
+          <p className="text-xs text-slate-400">App Guaranteed Lock</p>
         </div>
       </div>
 
-      {/* Live Map & Nearby Drivers Section */}
+      {/* Main Grid: Telemetry & Available Drivers */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* OpenStreetMap Component */}
         <div className="lg:col-span-8 space-y-4">
@@ -273,12 +311,7 @@ const Dashboard = () => {
             height="420px"
             center={{ lat: 12.9716, lng: 77.5946 }}
             zoom={13}
-            drivers={rides.map((r) => ({
-              name: r.driverName,
-              vehicle: `${r.vehicleDetails?.make} ${r.vehicleDetails?.model}`,
-              lat: r.originCoords?.lat,
-              lng: r.originCoords?.lng,
-            }))}
+            drivers={allMapDrivers}
             switchAlert={true}
           />
         </div>

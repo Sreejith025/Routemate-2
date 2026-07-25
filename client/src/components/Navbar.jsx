@@ -21,6 +21,7 @@ import {
   Settings,
   ShieldAlert,
   Clock,
+  Siren,
 } from "lucide-react";
 
 const Navbar = () => {
@@ -44,6 +45,7 @@ const Navbar = () => {
     { name: "Home", path: "/", icon: Home, show: true },
     { name: "Passenger Hub", path: "/dashboard", icon: LayoutDashboard, show: isSignedIn },
     { name: "Find Ride", path: "/find-ride", icon: Search, show: true },
+    { name: "Emergency SOS", path: "/emergency", icon: Siren, show: true, highlightEmergency: true },
     { name: "Ride History", path: "/ride-history", icon: Clock, show: isSignedIn },
     { name: "Taxi Switching", path: "/taxi-switching", icon: Zap, show: true, highlight: true },
     { name: "Features", path: "/features", icon: Layers, show: true },
@@ -52,6 +54,7 @@ const Navbar = () => {
 
   // Admin Nav Links (Full Access to All Dashboards & Features)
   const adminLinks = [
+    { name: "Emergency Control", path: "/admin/emergency", icon: Siren, show: true, highlightEmergency: true },
     { name: "Admin Console", path: "/admin", icon: ShieldAlert, show: true, highlightAdmin: true },
     { name: "Passenger Hub", path: "/dashboard", icon: LayoutDashboard, show: true },
     { name: "Driver Hub", path: "/driver", icon: Car, show: true },
@@ -96,6 +99,8 @@ const Navbar = () => {
                     className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
                       active
                         ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm"
+                        : link.highlightEmergency
+                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm animate-pulse"
                         : link.highlightAdmin
                         ? "bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm"
                         : link.highlight
@@ -103,7 +108,7 @@ const Navbar = () => {
                         : "text-slate-300 hover:text-white hover:bg-slate-800/60"
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${link.highlightAdmin ? "text-purple-400" : link.highlight ? "text-amber-400" : ""}`} />
+                    <Icon className={`w-3.5 h-3.5 ${link.highlightEmergency ? "text-rose-400" : link.highlightAdmin ? "text-purple-400" : link.highlight ? "text-amber-400" : ""}`} />
                     <span>{link.name}</span>
                   </Link>
                 );

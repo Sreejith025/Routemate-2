@@ -15,6 +15,8 @@ import { registerLocationSocketHandlers } from "./socket/locationSocket.js";
 
 import safeRideRoutes from "./routes/safeRideRoutes.js";
 import optimizationRoutes from "./routes/optimizationRoutes.js";
+import emergencyRoutes from "./routes/emergencyRoutes.js";
+import fareProtectionRoutes from "./routes/fareProtectionRoutes.js";
 import { runRideOptimizationCycle } from "./services/RideOptimizationService.js";
 
 dotenv.config();
@@ -65,6 +67,8 @@ app.use("/api/rides", rideRoutes);
 app.use("/api/rides", safeRideRoutes);
 app.use("/api/safe-ride", safeRideRoutes);
 app.use("/api/optimization", optimizationRoutes);
+app.use("/api/emergency", emergencyRoutes);
+app.use("/api/fare-protection", fareProtectionRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/location", locationRoutes);
 
@@ -72,7 +76,7 @@ app.use("/api/location", locationRoutes);
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "RouteMate AI Multi-Passenger Ride Re-Optimization Engine Running 🤖🚗💨",
+    message: "RouteMate AI Multi-Passenger Ride Re-Optimization & Emergency Dispatch Engine Running 🤖🚨🚗💨",
     socketConnected: true,
   });
 });
@@ -80,8 +84,16 @@ app.get("/", (req, res) => {
 // Register Location Socket Handlers
 registerLocationSocketHandlers(io);
 
-// MODULE 12: Real-Time Socket.IO Event Engine (All 12 Required Events)
+// MODULE 12: Real-Time Socket.IO Event Engine (All 12 Required Events + Emergency Module)
 io.on("connection", (socket) => {
+  // joinEmergency room
+  socket.on("joinEmergency", (data) => {
+    const emergencyRideId = typeof data === "object" ? data?.emergencyRideId || data?.rideId : data;
+    if (emergencyRideId) {
+      socket.join(`emergency_${emergencyRideId}`);
+    }
+  });
+
   // 1. joinRide
   socket.on("joinRide", (data) => {
     const rideId = typeof data === "object" ? data?.rideId : data;

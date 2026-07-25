@@ -101,6 +101,79 @@ const rideSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    lockedFare: {
+      type: Number,
+      default: null,
+    },
+    dropPin: {
+      type: String,
+      default: "7182",
+    },
+    waitingTimeMins: {
+      type: Number,
+      default: 0,
+    },
+    waitingCharge: {
+      type: Number,
+      default: 0,
+    },
+    routeDeviationAlert: {
+      isDeviated: { type: Boolean, default: false },
+      distanceKm: { type: Number, default: 0 },
+      reason: { type: String, default: "" },
+    },
+    isOfflineBooking: {
+      type: Boolean,
+      default: false,
+    },
+    paymentDetails: {
+      method: { type: String, default: "CASH" },
+      transactionId: { type: String, default: "" },
+      status: { type: String, default: "PENDING" },
+      receipt: { type: Object, default: null },
+    },
+    otp: {
+      type: String,
+      default: "4892",
+    },
+    driverPhoto: {
+      type: String,
+      default: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+    },
+    driverRating: {
+      type: Number,
+      default: 4.8,
+    },
+    currentStage: {
+      type: String,
+      enum: [
+        "Driver Assigned",
+        "Driver Arriving",
+        "Driver Reached Pickup",
+        "Passenger Picked Up",
+        "Shared Ride Started",
+        "Additional Passenger Joined",
+        "Ride In Progress",
+        "Passenger Dropped",
+        "Ride Completed",
+      ],
+      default: "Driver Assigned",
+    },
+    timeline: [
+      {
+        stage: String,
+        timestamp: { type: Date, default: Date.now },
+        completed: { type: Boolean, default: true },
+      },
+    ],
+    chatMessages: [
+      {
+        senderId: String,
+        senderName: String,
+        text: String,
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
     optimizationHistory: [
       {
         score: Number,

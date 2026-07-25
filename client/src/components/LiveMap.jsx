@@ -51,7 +51,7 @@ const LiveMap = ({
   center = null,
   zoom = 13,
   driverLocation = null,
-  driverName = "Alex Rivera",
+  driverName = "",
   vehicleDetails = null,
   passengerLocations = [],
   passengers = [],
@@ -166,25 +166,40 @@ const LiveMap = ({
     return [12.9716, 77.5946]; // Dynamic fallback if pending initial GPS fix
   }, [pickupCoords, destinationCoords, driverLocation, userGpsLocation, center]);
 
-  // Determine polyline points
-  let polylinePositions = [];
-  if (routeGeometry && routeGeometry.length > 0) {
-    polylinePositions = routeGeometry;
-  } else if (pickupCoords && destinationCoords) {
-    polylinePositions = [
-      [pickupCoords.lat, pickupCoords.lng],
-      [
-        (pickupCoords.lat + destinationCoords.lat) / 2 + 0.005,
-        (pickupCoords.lng + destinationCoords.lng) / 2 - 0.005,
-      ],
-      [destinationCoords.lat, destinationCoords.lng],
-    ];
-  } else if (route?.origin && route?.destination) {
-    polylinePositions = [
-      [route.origin.lat, route.origin.lng],
-      [route.destination.lat, route.destination.lng],
-    ];
-  }
+  const [osrmRoadPolyline, setOsrmRoadPolyline] = useState([]);
+
+  // Fetch real road route geometry from OSRM driving router
+  useEffect(() => {
+    if (routeGeometry && routeGeometry.length > 0) {
+      setOsrmRoadPolyline(routeGeometry);
+      return;
+    }
+
+    const pLat = pickupCoords?.lat || driverLocation?.latitude || userGpsLocation?.lat;
+    const pLng = pickupCoords?.lng || driverLocation?.longitude || userGpsLocation?.lng;
+    const dLat = destinationCoords?.lat || route?.destination?.lat;
+    const dLng = destinationCoords?.lng || route?.destination?.lng;
+
+    if (pLat && pLng && dLat && dLng) {
+      const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${dLng},${dLat}?overview=full&geometries=geojson`;
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.routes && data.routes[0]?.geometry?.coordinates) {
+            const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+            setOsrmRoadPolyline(coords);
+          }
+        })
+        .catch((err) => console.warn("LiveMap OSRM road fetch error:", err));
+    }
+  }, [routeGeometry, pickupCoords, destinationCoords, driverLocation, userGpsLocation, route]);
+
+  // Determine polyline points (Uses real OSRM road coordinates)
+  const polylinePositions = useMemo(() => {
+    if (routeGeometry && routeGeometry.length > 0) return routeGeometry;
+    if (osrmRoadPolyline && osrmRoadPolyline.length > 0) return osrmRoadPolyline;
+    return [];
+  }, [routeGeometry, osrmRoadPolyline]);
 
   return (
     <div
@@ -221,8 +236,8 @@ const LiveMap = ({
           </Marker>
         )}
 
-        {/* 2. Live Driver Marker */}
-        {driverLocation && (
+        {/* 2. Live Driver Marker (Only when real driver GPS location exists) */}
+        {driverLocation && (driverLocation.latitude || driverLocation.lat) && (driverLocation.longitude || driverLocation.lng) && (
           <DriverMarker
             driverLocation={driverLocation}
             driverName={driverName}
@@ -230,11 +245,11 @@ const LiveMap = ({
           />
         )}
 
-        {/* Additional nearby drivers */}
-        {drivers.map((drv, idx) => (
+        {/* Real nearby drivers with valid GPS coordinates */}
+        {drivers.filter(drv => drv && drv.lat != null && drv.lng != null && !isNaN(drv.lat) && !isNaN(drv.lng)).map((drv, idx) => (
           <Marker
             key={idx}
-            position={[drv.lat || (effectiveCenter[0] + idx * 0.01), drv.lng || (effectiveCenter[1] + idx * 0.01)]}
+            position={[drv.lat, drv.lng]}
             icon={createCustomIcon("linear-gradient(135deg, #10b981, #047857)", "🚕")}
           >
             <Popup>

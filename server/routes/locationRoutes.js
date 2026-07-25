@@ -3,6 +3,7 @@ import {
   updateLocation,
   getRideLocations,
   getDriverLocation,
+  getNearbyDrivers,
 } from "../controllers/locationController.js";
 import { requireAuthUser } from "../middleware/authMiddleware.js";
 
@@ -12,6 +13,7 @@ const router = express.Router();
 router.use(requireAuthUser);
 
 // Routes
+router.get("/nearby-drivers", getNearbyDrivers);
 router.post("/update", updateLocation);
 router.get("/:rideId", getRideLocations);
 router.get("/driver/:driverId", getDriverLocation);

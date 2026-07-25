@@ -19,10 +19,30 @@ import {
   Radio,
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
-import { getUserRideHistoryApi, confirmBookingApi } from "../services/api";
+import {
+  getUserRideHistoryApi,
+  confirmBookingApi,
+  updateRideStageApi,
+  sendRideChatMessageApi,
+  getRideChatHistoryApi,
+} from "../services/api";
 import { useLiveLocation } from "../hooks/useLiveLocation";
+import OfflineBookingModal from "../components/OfflineBookingModal";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
+import { MessageSquare, X, Send } from "lucide-react";
+
+const TIMELINE_STAGES = [
+  "Driver Assigned",
+  "Driver Arriving",
+  "Driver Reached Pickup",
+  "Passenger Picked Up",
+  "Shared Ride Started",
+  "Additional Passenger Joined",
+  "Ride In Progress",
+  "Passenger Dropped",
+  "Ride Completed",
+];
 
 const DriverDashboard = () => {
   const { dbUser, clerkUser, role } = useAuthContext();
@@ -32,15 +52,42 @@ const DriverDashboard = () => {
   const [selectedRideId, setSelectedRideId] = useState(null);
   const [driverAlert, setDriverAlert] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
+
+  // In-Ride Chat State
+  const [showDriverChat, setShowDriverChat] = useState(false);
+  const [driverChatMessages, setDriverChatMessages] = useState([]);
+  const [driverChatInput, setDriverChatInput] = useState("");
+  const [sendingDriverChat, setSendingDriverChat] = useState(false);
 
   useEffect(() => {
     fetchDriverRides();
   }, []);
 
-  // Listen for real-time driver notifications from SafeRide AI & Booking Requests
+  const handleUpdateRideStage = async (rideId, newStage) => {
+    try {
+      setActionLoading(true);
+      const res = await updateRideStageApi(rideId, { stage: newStage });
+      if (res.data?.success) {
+        toast.success(`Ride stage updated to '${newStage}'! Synced live to passenger.`, { icon: "📍" });
+        fetchDriverRides();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update ride stage.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Listen for real-time driver notifications & in-ride chat
   useEffect(() => {
     if (!selectedRideId) return;
     socket.emit("joinRide", { rideId: selectedRideId });
+
+    // Fetch initial chat history
+    getRideChatHistoryApi(selectedRideId).then((res) => {
+      if (res.data?.chatMessages) setDriverChatMessages(res.data.chatMessages);
+    }).catch(() => {});
 
     const handleDriverNotification = (data) => {
       setDriverAlert(data);
@@ -58,16 +105,45 @@ const DriverDashboard = () => {
       fetchDriverRides();
     };
 
+    const handleNewChatMessage = (data) => {
+      if (data.rideId === selectedRideId && data.message) {
+        setDriverChatMessages((prev) => [...prev, data.message]);
+      }
+    };
+
     socket.on("driverNotification", handleDriverNotification);
     socket.on("rideConvertedToPrivate", handleConvertedToPrivate);
     socket.on("bookingRequested", handleBookingRequested);
+    socket.on("newRideChatMessage", handleNewChatMessage);
 
     return () => {
       socket.off("driverNotification", handleDriverNotification);
       socket.off("rideConvertedToPrivate", handleConvertedToPrivate);
       socket.off("bookingRequested", handleBookingRequested);
+      socket.off("newRideChatMessage", handleNewChatMessage);
     };
   }, [selectedRideId]);
+
+  const handleSendDriverChat = async (e) => {
+    e.preventDefault();
+    if (!driverChatInput.trim() || !selectedRideId) return;
+    try {
+      setSendingDriverChat(true);
+      const driverName = dbUser?.fullName || "Driver";
+      const res = await sendRideChatMessageApi(selectedRideId, {
+        senderId: dbUser?.clerkId || dbUser?._id || "driver_demo",
+        senderName: `Driver (${driverName})`,
+        text: driverChatInput.trim(),
+      });
+      if (res.data?.success) {
+        setDriverChatInput("");
+      }
+    } catch (err) {
+      toast.error("Failed to send chat message.");
+    } finally {
+      setSendingDriverChat(false);
+    }
+  };
 
   const handleBookingAction = async (rideId, requestId, action) => {
     try {
@@ -174,6 +250,14 @@ const DriverDashboard = () => {
             >
               {isAvailable ? <ToggleRight className="w-5 h-5 text-emerald-400" /> : <ToggleLeft className="w-5 h-5 text-slate-400" />}
               <span>{isAvailable ? "GPS Status: ACTIVE" : "GPS Status: OFFLINE"}</span>
+            </button>
+
+            <button
+              onClick={() => setShowOfflineModal(true)}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 shadow-lg shadow-amber-500/10 flex items-center space-x-2 transition-all hover:scale-105"
+            >
+              <PlusCircle className="w-4 h-4 text-amber-400" />
+              <span>Book Walk-in / Offline Ride</span>
             </button>
 
             <Link
@@ -448,6 +532,58 @@ const DriverDashboard = () => {
                         ))}
                     </div>
                   )}
+
+                  {/* Driver Live Stage Controller Section */}
+                  <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                        <Navigation className="w-3.5 h-3.5 text-emerald-400" /> Live Stage Timeline Controller
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">
+                        Current: <strong className="text-white">{ride.currentStage || "Driver Assigned"}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={ride.currentStage || "Driver Assigned"}
+                        onChange={(e) => handleUpdateRideStage(ride._id, e.target.value)}
+                        disabled={actionLoading}
+                        className="flex-1 bg-slate-900 border border-slate-700 text-xs font-bold text-white rounded-lg p-2 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        {TIMELINE_STAGES.map((stg, sIdx) => (
+                          <option key={sIdx} value={stg}>
+                            {sIdx + 1}. {stg}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const curIdx = TIMELINE_STAGES.indexOf(ride.currentStage || "Driver Assigned");
+                          const nextStage = TIMELINE_STAGES[Math.min(TIMELINE_STAGES.length - 1, curIdx + 1)];
+                          handleUpdateRideStage(ride._id, nextStage);
+                        }}
+                        disabled={actionLoading}
+                        className="px-3 py-2 rounded-lg text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 transition-colors shrink-0"
+                      >
+                        Advance ➔
+                      </button>
+                    </div>
+
+                    {/* Chat Passenger Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRideId(ride._id);
+                        setShowDriverChat(true);
+                      }}
+                      className="w-full mt-2 py-2 rounded-lg text-xs font-bold text-teal-300 bg-teal-950/40 hover:bg-teal-900/60 border border-teal-500/40 flex items-center justify-center space-x-2 transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>💬 Chat with Passenger</span>
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -488,6 +624,14 @@ const DriverDashboard = () => {
           />
         </div>
       </div>
+
+      <OfflineBookingModal
+        isOpen={showOfflineModal}
+        onClose={() => setShowOfflineModal(false)}
+        driverId={userId}
+        driverName={dbUser?.fullName || clerkUser?.firstName || "Driver"}
+        onBookingCreated={() => fetchDriverRides()}
+      />
     </div>
   );
 };

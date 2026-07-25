@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ShieldAlert,
+  Siren,
   LayoutDashboard,
   UserCheck,
   Car,
@@ -23,6 +24,8 @@ const AdminSidebar = ({ activeTab, onTabChange }) => {
 
   // External Page Links
   const dashboardRoutes = [
+    { name: "🛡️ Fare & Safety Control", path: "/admin/fare-safety", icon: ShieldAlert, color: "text-emerald-400 font-bold" },
+    { name: "🚨 Emergency Control Room", path: "/admin/emergency", icon: Siren, color: "text-rose-400 font-bold" },
     { name: "Admin Control Center", path: "/admin", icon: ShieldAlert, color: "text-purple-400" },
     { name: "Passenger Dashboard", path: "/dashboard", icon: UserCheck, color: "text-indigo-400" },
     { name: "Driver Dashboard", path: "/driver", icon: Car, color: "text-emerald-400" },

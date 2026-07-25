@@ -91,13 +91,20 @@ export const useLiveLocation = ({
     }
   }, []);
 
-  // 3. Update route and ETA whenever driver location or destination changes
+  // 3. Update route and ETA whenever driver location, current location, or destination changes
   useEffect(() => {
-    const activeDriver = role === "Driver" ? currentLocation : driverLocation;
-    if (activeDriver && destinationCoords?.lat && destinationCoords?.lng) {
+    const startPoint =
+      role === "Driver"
+        ? currentLocation
+        : driverLocation || currentLocation;
+
+    const startLat = startPoint?.latitude || startPoint?.lat;
+    const startLng = startPoint?.longitude || startPoint?.lng;
+
+    if (startLat && startLng && destinationCoords?.lat && destinationCoords?.lng) {
       fetchOSRMRoute(
-        activeDriver.latitude,
-        activeDriver.longitude,
+        startLat,
+        startLng,
         destinationCoords.lat,
         destinationCoords.lng
       );

@@ -17,7 +17,11 @@ import SettingsPage from "../pages/SettingsPage";
 import FindRide from "../pages/FindRide";
 import OfferRide from "../pages/OfferRide";
 import RideDetails from "../pages/RideDetails";
+import ActiveRideTracking from "../pages/ActiveRideTracking";
 import RideHistory from "../pages/RideHistory";
+import EmergencyDispatch from "../pages/EmergencyDispatch";
+import AdminEmergencyDashboard from "../pages/AdminEmergencyDashboard";
+import AdminFareSafetyDashboard from "../pages/AdminFareSafetyDashboard";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -31,6 +35,8 @@ const AppRoutes = () => {
         <Route path="/features" element={<Features />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/taxi-switching" element={<TaxiSwitching />} />
+        <Route path="/emergency" element={<EmergencyDispatch />} />
+        <Route path="/emergency/track/:id" element={<EmergencyDispatch />} />
         <Route path="/sign-in/*" element={<SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
         <Route path="/find-ride" element={<FindRide />} />
@@ -56,12 +62,28 @@ const AppRoutes = () => {
           }
         />
 
-        {/* Protected Admin Dashboard */}
+        {/* Protected Admin Dashboard & Emergency Control Room */}
         <Route
           path="/admin"
           element={
             <ProtectedRoute allowedRoles={["Admin"]}>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/emergency"
+          element={
+            <ProtectedRoute allowedRoles={["Admin"]}>
+              <AdminEmergencyDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/fare-safety"
+          element={
+            <ProtectedRoute allowedRoles={["Admin"]}>
+              <AdminFareSafetyDashboard />
             </ProtectedRoute>
           }
         />
@@ -86,12 +108,20 @@ const AppRoutes = () => {
           }
         />
 
-        {/* Ride Details & History */}
+        {/* Active Ride Tracking & Details */}
+        <Route
+          path="/active-ride/:id"
+          element={
+            <ProtectedRoute>
+              <ActiveRideTracking />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/rides/:id"
           element={
             <ProtectedRoute>
-              <RideDetails />
+              <ActiveRideTracking />
             </ProtectedRoute>
           }
         />

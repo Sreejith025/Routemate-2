@@ -154,3 +154,66 @@ export const getDriverLocation = async (req, res) => {
     });
   }
 };
+
+/**
+ * GET /api/location/nearby-drivers
+ * Returns all active real driver locations for map display
+ */
+export const getNearbyDrivers = async (req, res) => {
+  try {
+    const liveLocations = await LiveLocation.find({ role: "Driver" })
+      .sort({ updatedAt: -1 })
+      .limit(50);
+
+    const activeRides = await Ride.find({
+      status: { $in: ["active", "scheduled"] },
+    }).limit(50);
+
+    const driversMap = new Map();
+
+    for (const loc of liveLocations) {
+      if (loc.latitude && loc.longitude) {
+        driversMap.set(loc.userId, {
+          driverId: loc.userId,
+          name: "RouteMate Driver",
+          lat: loc.latitude,
+          lng: loc.longitude,
+          vehicle: "RouteMate Taxi",
+          rating: 4.8,
+          updatedAt: loc.updatedAt,
+        });
+      }
+    }
+
+    for (const r of activeRides) {
+      if (r.driverId && r.originCoords?.lat && r.originCoords?.lng) {
+        const existing = driversMap.get(r.driverId);
+        driversMap.set(r.driverId, {
+          driverId: r.driverId,
+          name: r.driverName || existing?.name || "RouteMate Driver",
+          lat: existing?.lat || r.originCoords.lat,
+          lng: existing?.lng || r.originCoords.lng,
+          vehicle: r.vehicleDetails ? `${r.vehicleDetails.make} ${r.vehicleDetails.model} (${r.vehicleDetails.plate})` : "RouteMate Taxi",
+          rating: r.driverRating || 4.8,
+          updatedAt: new Date(),
+        });
+      }
+    }
+
+    const drivers = Array.from(driversMap.values());
+
+    return res.status(200).json({
+      success: true,
+      count: drivers.length,
+      drivers,
+    });
+  } catch (error) {
+    console.error("Error fetching nearby drivers:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch nearby drivers",
+      error: error.message,
+    });
+  }
+};
+

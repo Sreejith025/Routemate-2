@@ -514,8 +514,10 @@ export const getLiveTaxiAlternatives = async (req, res) => {
         role: "Driver",
       }).sort({ updatedAt: -1 });
 
-      const candLat = candLocation?.latitude || candidate.originCoords?.lat || currentLat + 0.004;
-      const candLng = candLocation?.longitude || candidate.originCoords?.lng || currentLng + 0.004;
+      const candLat = candLocation?.latitude || candidate.originCoords?.lat;
+      const candLng = candLocation?.longitude || candidate.originCoords?.lng;
+
+      if (!candLat || !candLng) continue;
 
       const proximityMeters = calculateDistanceMeters(currentLat, currentLng, candLat, candLng);
       const distanceKm = Number((proximityMeters / 1000).toFixed(2));
@@ -543,7 +545,7 @@ export const getLiveTaxiAlternatives = async (req, res) => {
               _id: candidate._id,
               driverId: candidate.driverId,
               driverName: candidate.driverName || "RouteMate Driver",
-              driverRating: 4.8,
+              driverRating: candidate.driverRating || 4.8,
               taxiNumber: candidate.vehicleDetails?.plate || "RT-9942",
               vehicleDetails: candidate.vehicleDetails || { make: "Toyota", model: "Prius", color: "White" },
               distanceKm,
@@ -590,7 +592,35 @@ export const switchToCandidateTaxi = async (req, res) => {
     const io = req.app.get("io");
 
     const currentRide = await Ride.findById(id);
-    const targetRide = await Ride.findById(targetRideId);
+    let targetRide = await Ride.findById(targetRideId);
+
+    // Support candidate demo taxi switches
+    if (!targetRide && targetRideId.startsWith("candidate_taxi_demo")) {
+      currentRide.driverName = targetRideId.endsWith("1") ? "Alex Rivera" : "Marcus Vance";
+      currentRide.driverRating = 4.9;
+      currentRide.vehicleDetails = {
+        make: targetRideId.endsWith("1") ? "Toyota" : "Hyundai",
+        model: targetRideId.endsWith("1") ? "Camry Hybrid" : "Ioniq 5",
+        color: targetRideId.endsWith("1") ? "Silver" : "Dark Blue",
+        plate: targetRideId.endsWith("1") ? "RT-9988" : "RT-7731",
+      };
+      currentRide.dynamicSwitchSuggested = false;
+      await currentRide.save();
+
+      if (io) {
+        io.to(`ride_${currentRide._id}`).emit("switchAccepted", {
+          rideId: currentRide._id.toString(),
+          message: `Taxi switch executed! Driver ${currentRide.driverName} (${currentRide.vehicleDetails.plate}) has picked up the passenger.`,
+        });
+        io.to(`ride_${currentRide._id}`).emit("rideUpdated", { rideId: currentRide._id.toString(), ride: currentRide });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully switched to Taxi ${currentRide.vehicleDetails.plate} driven by ${currentRide.driverName}!`,
+        ride: currentRide,
+      });
+    }
 
     if (!currentRide || !targetRide) {
       return res.status(404).json({ success: false, message: "Current or Target ride not found" });

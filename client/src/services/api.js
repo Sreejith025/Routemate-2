@@ -40,6 +40,9 @@ export const getRideByIdApi = (id) => api.get(`/rides/${id}`);
 export const createRideApi = (rideData) => api.post("/rides", rideData);
 export const bookRideApi = (id, bookingData) => api.post(`/rides/${id}/book`, bookingData);
 export const confirmBookingApi = (id, actionData) => api.post(`/rides/${id}/confirm-booking`, actionData);
+export const updateRideStageApi = (id, stageData) => api.post(`/rides/${id}/update-stage`, stageData);
+export const sendRideChatMessageApi = (id, chatData) => api.post(`/rides/${id}/chat`, chatData);
+export const getRideChatHistoryApi = (id) => api.get(`/rides/${id}/chat`);
 export const triggerSwitchApi = (id, switchData) => api.post(`/rides/${id}/trigger-switch`, switchData);
 export const respondSwitchApi = (id, actionData) => api.post(`/rides/${id}/respond-switch`, actionData);
 export const leaveSharedRideApi = (id, data) => api.post(`/rides/${id}/leave-shared-ride`, data);
@@ -52,6 +55,7 @@ export const getDashboardStatsApi = () => api.get("/dashboard/stats");
 export const updateLocationApi = (locationData) => api.post("/location/update", locationData);
 export const getRideLocationsApi = (rideId) => api.get(`/location/${rideId}`);
 export const getDriverLocationApi = (driverId) => api.get(`/location/driver/${driverId}`);
+export const getNearbyDriversApi = () => api.get("/location/nearby-drivers");
 
 // SafeRide AI APIs & Smart Exit
 export const reportDiscomfortApi = (rideId, data) => api.post(`/rides/${rideId}/report-discomfort`, data);
@@ -69,5 +73,21 @@ export const cancelSharedRideApi = (rideId, data) => api.post(`/rides/${rideId}/
 export const runOptimizationApi = () => api.post("/optimization/run");
 export const getOptimizationLogsApi = () => api.get("/optimization/logs");
 export const getOptimizationStatsApi = () => api.get("/optimization/stats");
+
+// AI Emergency Dispatch & Dashboard Module APIs
+export const createEmergencyBookingApi = (data) => api.post("/emergency/book", data);
+export const getEmergencyRideStatusApi = (id) => api.get(`/emergency/${id}`);
+export const respondEmergencyRequestApi = (id, data) => api.post(`/emergency/${id}/respond`, data);
+export const getAdminEmergencyDashboardDataApi = () => api.get("/emergency/admin/dashboard");
+export const reoptimizeEmergencyRideApi = (id) => api.post(`/emergency/${id}/reoptimize`);
+
+// AI Fare Protection, Offline Booking & Razorpay Payment APIs
+export const reportFareDisputeApi = (data) => api.post("/fare-protection/report-dispute", data);
+export const createOfflineBookingApi = (data) => api.post("/fare-protection/offline-booking", data);
+export const createRazorpayOrderApi = (data) => api.post("/fare-protection/razorpay/create-order", data);
+export const verifyRazorpayPaymentApi = (data) => api.post("/fare-protection/razorpay/verify", data);
+export const verifyDropPinApi = (id, data) => api.post(`/fare-protection/verify-drop-pin/${id}`, data);
+export const getDigitalReceiptApi = (id) => api.get(`/fare-protection/receipt/${id}`);
+export const getAdminFareSafetyDataApi = () => api.get("/fare-protection/admin/dashboard");
 
 export default api;

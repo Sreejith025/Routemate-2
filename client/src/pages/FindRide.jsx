@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MapPin,
   Search,
@@ -24,9 +25,27 @@ import socket from "../services/socket";
 import toast from "react-hot-toast";
 
 const FindRide = () => {
+  const navigate = useNavigate();
   const { clerkUser, dbUser } = useAuthContext();
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handleRideConfirmed = (data) => {
+      if (data.rideId) {
+        toast.success("✅ Driver Confirmed Booking! Redirecting to Active Ride Tracking...", { duration: 4000 });
+        navigate(`/active-ride/${data.rideId}`);
+      }
+    };
+
+    socket.on("rideConfirmed", handleRideConfirmed);
+    socket.on("bookingAccepted", handleRideConfirmed);
+
+    return () => {
+      socket.off("rideConfirmed", handleRideConfirmed);
+      socket.off("bookingAccepted", handleRideConfirmed);
+    };
+  }, [navigate]);
   const [pickupInput, setPickupInput] = useState("");
   const [destInput, setDestInput] = useState("");
 

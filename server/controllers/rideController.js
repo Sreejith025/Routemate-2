@@ -354,6 +354,19 @@ export const confirmBooking = async (req, res) => {
           message: `Driver accepted booking for ${targetReq.name}! Seat confirmed.`,
           timestamp: new Date().toISOString(),
         });
+        io.to(`ride_${ride._id}`).emit("rideConfirmed", {
+          rideId: ride._id.toString(),
+          passengerId: targetReq.userId,
+          passengerName: targetReq.name,
+          driverName: ride.driverName,
+          vehiclePlate: ride.vehicleDetails?.plate,
+          message: "✅ Ride Confirmed! Driver assigned.",
+          timestamp: new Date().toISOString(),
+        });
+        io.emit("rideConfirmed", {
+          rideId: ride._id.toString(),
+          passengerId: targetReq.userId,
+        });
         io.to(`ride_${ride._id}`).emit("rideUpdated", { rideId: ride._id.toString(), ride });
       }
 
@@ -525,6 +538,133 @@ export const leaveSharedRide = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error processing leave shared ride request",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * ACTIVE RIDE TRACKING: Update Ride Stage Timeline
+ */
+export const updateRideStage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stage } = req.body;
+
+    const ride = await Ride.findById(id);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    ride.currentStage = stage;
+    if (!ride.timeline) ride.timeline = [];
+
+    // Push stage if not duplicate
+    const exists = ride.timeline.some((t) => t.stage === stage);
+    if (!exists) {
+      ride.timeline.push({ stage, timestamp: new Date(), completed: true });
+    }
+
+    if (stage === "Ride Completed") {
+      ride.status = "completed";
+    }
+
+    await ride.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`ride_${ride._id}`).emit("rideStatusUpdated", {
+        rideId: ride._id.toString(),
+        stage,
+        status: ride.status,
+        timeline: ride.timeline,
+        timestamp: new Date().toISOString(),
+      });
+      io.to(`ride_${ride._id}`).emit("rideUpdated", { rideId: ride._id.toString(), ride });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Ride stage updated to '${stage}'`,
+      ride,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update ride stage timeline",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * ACTIVE RIDE TRACKING: Real-Time Driver-Passenger In-Ride Chat
+ */
+export const sendRideChatMessage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { senderId, senderName, text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ success: false, message: "Message text is required" });
+    }
+
+    const ride = await Ride.findById(id);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    const msgObj = {
+      senderId: senderId || req.auth?.userId || "user_demo",
+      senderName: senderName || "Passenger",
+      text: text.trim(),
+      timestamp: new Date(),
+    };
+
+    if (!ride.chatMessages) ride.chatMessages = [];
+    ride.chatMessages.push(msgObj);
+    await ride.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`ride_${ride._id}`).emit("newRideChatMessage", {
+        rideId: ride._id.toString(),
+        message: msgObj,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: msgObj,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send in-ride chat message",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * ACTIVE RIDE TRACKING: Get In-Ride Chat History
+ */
+export const getRideChatHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ride = await Ride.findById(id);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      chatMessages: ride.chatMessages || [],
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch in-ride chat history",
       error: error.message,
     });
   }
