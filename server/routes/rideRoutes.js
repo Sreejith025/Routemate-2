@@ -28,6 +28,18 @@ import {
   getClientAnalytics,
 } from "../controllers/clientController.js";
 
+import {
+  getEligibleSharedRides,
+  joinSecondPassenger,
+} from "../controllers/secondPassengerController.js";
+
+import {
+  verifyCashAmount,
+  unlockDriverPin,
+  triggerInstantPayout,
+  checkStallingTelemetry,
+} from "../controllers/antiExtortionController.js";
+
 const router = express.Router();
 
 // Public / Guest searchable ride routes
